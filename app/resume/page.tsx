@@ -27,7 +27,7 @@ export default async function ResumePage() {
           <h2 className="text-lg font-semibold">Skills</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
             {(latestResume?.structuredData.skills || []).length ? (
-              latestResume?.structuredData.skills.map((skill) => <li key={skill}>• {skill}</li>)
+              latestResume?.structuredData.skills.map((skill, index) => <li key={`${skill}-${index}`}>- {skill}</li>)
             ) : (
               <li className="text-slate-500">No skills extracted yet.</li>
             )}
@@ -49,6 +49,39 @@ export default async function ResumePage() {
               ))
             ) : (
               <p className="text-sm text-slate-500">No projects extracted yet.</p>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-4 grid gap-4 md:grid-cols-2">
+        <article className="rounded-xl border bg-white p-6">
+          <h2 className="text-lg font-semibold">Achievements</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            {(latestResume?.structuredData.achievements || []).length ? (
+              latestResume?.structuredData.achievements.map((achievement, index) => (
+                <li key={`${achievement}-${index}`}>- {achievement}</li>
+              ))
+            ) : (
+              <li className="text-slate-500">No achievements extracted yet.</li>
+            )}
+          </ul>
+        </article>
+
+        <article className="rounded-xl border bg-white p-6">
+          <h2 className="text-lg font-semibold">Extracurricular / Voluntary Experience</h2>
+          <div className="mt-3 space-y-3">
+            {(latestResume?.structuredData.extracurricularExperience || []).length ? (
+              latestResume?.structuredData.extracurricularExperience.map((item, index) => (
+                <div className="rounded-md border p-3" key={`${item.activity}-${item.organization}-${index}`}>
+                  <p className="font-medium">{item.activity || "N/A"}</p>
+                  <p className="text-sm text-slate-600">{item.organization || "N/A"}</p>
+                  <p className="text-xs text-slate-500">{item.duration || "N/A"}</p>
+                  <p className="mt-2 text-sm text-slate-600">{item.description || "No description"}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">No extracurricular or voluntary entries extracted yet.</p>
             )}
           </div>
         </article>

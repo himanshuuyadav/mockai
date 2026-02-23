@@ -3,6 +3,7 @@ import { Schema, model, models } from "mongoose";
 const resumeStructuredSchema = new Schema(
   {
     skills: [{ type: String, default: "" }],
+    achievements: [{ type: String, default: "" }],
     projects: [
       {
         name: { type: String, default: "" },
@@ -15,6 +16,14 @@ const resumeStructuredSchema = new Schema(
         role: { type: String, default: "" },
         company: { type: String, default: "" },
         duration: { type: String, default: "" },
+      },
+    ],
+    extracurricularExperience: [
+      {
+        activity: { type: String, default: "" },
+        organization: { type: String, default: "" },
+        duration: { type: String, default: "" },
+        description: { type: String, default: "" },
       },
     ],
     education: [{ type: String, default: "" }],

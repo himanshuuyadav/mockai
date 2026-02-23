@@ -44,10 +44,41 @@ export async function getLatestResumeByUserId(userId: string) {
       extractedText: string;
       structuredData: {
         skills: string[];
+        achievements: string[];
         projects: { name: string; tech: string[]; description: string }[];
         experience: { role: string; company: string; duration: string }[];
+        extracurricularExperience: {
+          activity: string;
+          organization: string;
+          duration: string;
+          description: string;
+        }[];
         education: string[];
       };
       createdAt: Date;
+    } | null>();
+}
+
+export async function getLatestResumeRecordByUserId(userId: string) {
+  await connectToDatabase();
+
+  return Resume.findOne({ userId })
+    .sort({ createdAt: -1 })
+    .select("structuredData")
+    .lean<{
+      _id: { toString(): string };
+      structuredData: {
+        skills: string[];
+        achievements: string[];
+        projects: { name: string; tech: string[]; description: string }[];
+        experience: { role: string; company: string; duration: string }[];
+        extracurricularExperience: {
+          activity: string;
+          organization: string;
+          duration: string;
+          description: string;
+        }[];
+        education: string[];
+      };
     } | null>();
 }
