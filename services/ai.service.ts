@@ -1,18 +1,22 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 import { getRequiredEnv } from "@/lib/env";
 
-let openaiClient: OpenAI | null = null;
+let geminiClient: GoogleGenAI | null = null;
 
-function getOpenAIClient() {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: getRequiredEnv("OPENAI_API_KEY"),
+function getGeminiClient() {
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({
+      apiKey: getRequiredEnv("GEMINI_API_KEY"),
     });
   }
 
-  return openaiClient;
+  return geminiClient;
+}
+
+function getGeminiResponseText(response: { text?: string | null }) {
+  return (response.text ?? "").trim();
 }
 
 const resumeStructuredSchema = z.object({
@@ -45,15 +49,22 @@ export async function generateInterviewQuestions(input: {
   level: string;
   resumeSummary: string;
 }) {
-  const prompt = `Create 8 concise interview questions for a ${input.level} ${input.role} candidate based on this resume summary:\n${input.resumeSummary}`;
+  const prompt = [
+    `Create 8 concise interview questions for a ${input.level} ${input.role} candidate.`,
+    "Base them on this resume summary.",
+    "Return one question per line, with no extra commentary.",
+    "",
+    input.resumeSummary,
+  ].join("\n");
 
-  const response = await getOpenAIClient().responses.create({
-    model: "gpt-4.1-mini",
-    input: prompt,
+  const response = await getGeminiClient().models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
   });
 
-  return response.output_text
+  return getGeminiResponseText(response)
     .split("\n")
+    .map((line) => line.replace(/^\d+[\).\s-]*/, "").trim())
     .map((line) => line.trim())
     .filter(Boolean);
 }
@@ -67,12 +78,12 @@ export async function evaluateInterviewAnswers(input: {
     .map((q, i) => `Q${i + 1}: ${q}\nA${i + 1}: ${input.answers[i] ?? ""}`)
     .join("\n\n");
 
-  const response = await getOpenAIClient().responses.create({
-    model: "gpt-4.1-mini",
-    input: `You are an interview evaluator for ${input.role}. Score from 0-100 and give concise feedback.\n\n${joined}`,
+  const response = await getGeminiClient().models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `You are an interview evaluator for ${input.role}. Score from 0-100 and give concise feedback.\n\n${joined}`,
   });
 
-  return response.output_text;
+  return getGeminiResponseText(response);
 }
 
 export async function structureResumeData(extractedText: string): Promise<StructuredResumeData> {
@@ -90,17 +101,20 @@ export async function structureResumeData(extractedText: string): Promise<Struct
     extractedText,
   ].join("\n");
 
-  const response = await getOpenAIClient().responses.create({
-    model: "gpt-4.1-mini",
-    input: prompt,
+  const response = await getGeminiClient().models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+    },
   });
 
-  const raw = response.output_text.trim();
+  const raw = getGeminiResponseText(response);
   const jsonStartIndex = raw.indexOf("{");
   const jsonEndIndex = raw.lastIndexOf("}");
 
   if (jsonStartIndex === -1 || jsonEndIndex === -1) {
-    throw new Error("OpenAI did not return valid JSON for resume structuring.");
+    throw new Error("Gemini did not return valid JSON for resume structuring.");
   }
 
   const parsed = JSON.parse(raw.slice(jsonStartIndex, jsonEndIndex + 1)) as unknown;
