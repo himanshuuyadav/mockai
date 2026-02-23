@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-import { getRequiredEnv } from "@/lib/env";
+import { getEnv, getRequiredEnv } from "@/lib/env";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -23,8 +23,9 @@ export async function connectToDatabase() {
 
   if (!globalCache.promise) {
     const mongoUri = getRequiredEnv("MONGODB_URI");
+    const dbName = getEnv("MONGODB_DB_NAME") ?? "mock";
     globalCache.promise = mongoose.connect(mongoUri, {
-      dbName: "mockai",
+      dbName,
       bufferCommands: false,
     });
   }

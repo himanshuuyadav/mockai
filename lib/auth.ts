@@ -1,9 +1,13 @@
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import type { JWT } from "next-auth/jwt";
 
-import { connectToDatabase } from "@/lib/db";
 import { getRequiredEnv } from "@/lib/env";
-import { User } from "@/models/User";
+import { findUserIdByEmail, findUserProfileById, syncOAuthUser } from "@/services/user.service";
+
+type AuthToken = JWT & {
+  subscriptionTier?: "free" | "pro" | "enterprise";
+};
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -25,16 +29,11 @@ export const authOptions: NextAuthOptions = {
         return false;
       }
 
-      await connectToDatabase();
-      await User.findOneAndUpdate(
-        { email: user.email },
-        {
-          name: user.name ?? "",
-          image: user.image ?? "",
-          lastLoginAt: new Date(),
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
+      await syncOAuthUser({
+        email: user.email,
+        name: user.name,
+        image: user.image,
+      });
       return true;
     },
     async jwt({ token }) {
@@ -42,16 +41,21 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      await connectToDatabase();
-      const dbUser = await User.findOne({ email: token.email }).lean();
-      if (dbUser) {
-        token.sub = dbUser._id.toString();
+      const userId = await findUserIdByEmail(token.email);
+      if (userId) {
+        token.sub = userId;
+
+        const profile = await findUserProfileById(userId);
+        if (profile) {
+          (token as AuthToken).subscriptionTier = profile.subscriptionTier;
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        session.user.subscriptionTier = (token as AuthToken).subscriptionTier;
       }
       return session;
     },

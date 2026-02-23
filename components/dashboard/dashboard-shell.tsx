@@ -3,13 +3,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-
-const quickLinks = [
-  { href: "/resume", title: "Resume", desc: "Upload and parse your latest resume." },
-  { href: "/interview", title: "Interview", desc: "Run AI-generated mock interview sessions." },
-  { href: "/report", title: "Report", desc: "Review feedback and performance trends." },
-  { href: "/profile", title: "Profile", desc: "Manage account and interview preferences." },
-];
+import { FEATURE_ROUTES } from "@/utils/constants";
 
 export async function DashboardShell() {
   const session = await auth();
@@ -28,12 +22,12 @@ export async function DashboardShell() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-2">
-          {quickLinks.map((item) => (
+          {FEATURE_ROUTES.map((item) => (
             <Link key={item.href} href={item.href}>
               <Card className="h-full transition hover:border-primary">
                 <CardHeader>
                   <CardTitle>{item.title}</CardTitle>
-                  <CardDescription>{item.desc}</CardDescription>
+                  <CardDescription>{item.dashboardDescription}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-slate-600">Open {item.title} workspace</p>

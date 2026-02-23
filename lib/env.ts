@@ -5,6 +5,9 @@ const requiredServerEnv = [
   "NEXTAUTH_SECRET",
   "NEXTAUTH_URL",
   "OPENAI_API_KEY",
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
 ] as const;
 
 type RequiredServerEnvKey = (typeof requiredServerEnv)[number];
@@ -15,6 +18,10 @@ export function getRequiredEnv(key: RequiredServerEnvKey): string {
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;
+}
+
+export function getEnv(key: string): string | undefined {
+  return process.env[key];
 }
 
 export function validateServerEnv(): void {

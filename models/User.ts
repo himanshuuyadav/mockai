@@ -2,11 +2,15 @@ import { Schema, model, models, type InferSchemaType } from "mongoose";
 
 const userSchema = new Schema(
   {
-    name: { type: String, trim: true },
+    name: { type: String, trim: true, default: "" },
     email: { type: String, required: true, unique: true, index: true },
     image: { type: String, default: "" },
-    role: { type: String, default: "user" },
-    lastLoginAt: { type: Date, default: Date.now },
+    subscriptionTier: {
+      type: String,
+      enum: ["free", "pro", "enterprise"],
+      default: "free",
+      index: true,
+    },
   },
   { timestamps: true },
 );
