@@ -1,4 +1,5 @@
 type SentimentLabel = "positive" | "neutral" | "negative";
+type InterviewType = "technical" | "hr";
 
 export type AnswerAnalysisReport = {
   transcript: string;
@@ -9,6 +10,8 @@ export type AnswerAnalysisReport = {
   confidenceScore: number;
   sentiment: SentimentLabel;
   technicalDepth: number;
+  behavioralDepth: number;
+  domainDepth: number;
   improvementSuggestions: string[];
 };
 
@@ -73,7 +76,28 @@ function countTechnicalSignals(text: string) {
   return technicalKeywords.reduce((acc, keyword) => acc + countWordOccurrences(lower, keyword), 0);
 }
 
-export function analyzeInterviewAnswer(transcript: string): AnswerAnalysisReport {
+function countBehavioralSignals(text: string) {
+  const lower = text.toLowerCase();
+  const behavioralKeywords = [
+    "team",
+    "collaborate",
+    "lead",
+    "leadership",
+    "conflict",
+    "stakeholder",
+    "mentor",
+    "ownership",
+    "communication",
+    "feedback",
+    "responsibility",
+    "challenge",
+    "resolution",
+  ];
+
+  return behavioralKeywords.reduce((acc, keyword) => acc + countWordOccurrences(lower, keyword), 0);
+}
+
+export function analyzeInterviewAnswer(transcript: string, interviewType: InterviewType): AnswerAnalysisReport {
   const normalized = transcript.trim();
   const words = normalized ? normalized.split(/\s+/) : [];
   const wordCount = words.length;
@@ -95,11 +119,14 @@ export function analyzeInterviewAnswer(transcript: string): AnswerAnalysisReport
   const fillerRatio = wordCount > 0 ? fillerWordsCount / wordCount : 0;
   const speakingSpeedWpm = wordCount / estimatedMinutes;
   const technicalSignals = countTechnicalSignals(normalized);
+  const behavioralSignals = countBehavioralSignals(normalized);
   const sentiment = analyzeSentiment(normalized);
 
   const sentenceClarity = clampScore(100 - Math.abs(avgWordsPerSentence - 18) * 2 - fillerRatio * 120);
   const confidenceScore = clampScore(75 - fillerRatio * 150 + (sentiment === "positive" ? 10 : sentiment === "negative" ? -10 : 0));
   const technicalDepth = clampScore(technicalSignals * 12 + Math.min(25, wordCount / 8));
+  const behavioralDepth = clampScore(behavioralSignals * 12 + Math.min(25, wordCount / 8));
+  const domainDepth = interviewType === "technical" ? technicalDepth : behavioralDepth;
 
   const improvementSuggestions: string[] = [];
   if (fillerWordsCount > 5) {
@@ -113,8 +140,11 @@ export function analyzeInterviewAnswer(transcript: string): AnswerAnalysisReport
   if (sentenceClarity < 65) {
     improvementSuggestions.push("Use shorter sentence structures and one idea per sentence.");
   }
-  if (technicalDepth < 55) {
+  if (interviewType === "technical" && technicalDepth < 55) {
     improvementSuggestions.push("Add deeper technical reasoning, tradeoffs, and measurable outcomes.");
+  }
+  if (interviewType === "hr" && behavioralDepth < 55) {
+    improvementSuggestions.push("Add stronger behavioral examples with leadership, conflict handling, and clear outcomes.");
   }
   if (!improvementSuggestions.length) {
     improvementSuggestions.push("Maintain this structure and add one quantified impact metric per answer.");
@@ -129,17 +159,22 @@ export function analyzeInterviewAnswer(transcript: string): AnswerAnalysisReport
     confidenceScore,
     sentiment,
     technicalDepth,
+    behavioralDepth,
+    domainDepth,
     improvementSuggestions,
   };
 }
 
-export function buildFinalInterviewReport(analyses: AnswerAnalysisReport[]) {
+export function buildFinalInterviewReport(analyses: AnswerAnalysisReport[], interviewType: InterviewType) {
   const validAnalyses = analyses.filter((item) => item.transcript);
   if (!validAnalyses.length) {
     return {
       confidenceScore: 0,
       speakingSpeedWpm: 0,
       technicalDepth: 0,
+      behavioralDepth: 0,
+      domainDepth: 0,
+      domainDepthLabel: interviewType === "technical" ? "Technical Depth" : "Behavioral Depth",
       fillerWordsCount: 0,
       sentiment: "neutral" as SentimentLabel,
       improvementSuggestions: ["No analyzed answers available."],
@@ -169,6 +204,9 @@ export function buildFinalInterviewReport(analyses: AnswerAnalysisReport[]) {
     confidenceScore: avg(validAnalyses.map((item) => item.confidenceScore)),
     speakingSpeedWpm: avg(validAnalyses.map((item) => item.speakingSpeedWpm)),
     technicalDepth: avg(validAnalyses.map((item) => item.technicalDepth)),
+    behavioralDepth: avg(validAnalyses.map((item) => item.behavioralDepth)),
+    domainDepth: avg(validAnalyses.map((item) => item.domainDepth)),
+    domainDepthLabel: interviewType === "technical" ? "Technical Depth" : "Behavioral Depth",
     fillerWordsCount: validAnalyses.reduce((sum, item) => sum + item.fillerWordsCount, 0),
     sentiment: dominantSentiment,
     improvementSuggestions: suggestions,
@@ -177,6 +215,8 @@ export function buildFinalInterviewReport(analyses: AnswerAnalysisReport[]) {
       confidence: item.confidenceScore,
       clarity: item.sentenceClarity,
       technicalDepth: item.technicalDepth,
+      behavioralDepth: item.behavioralDepth,
+      domainDepth: item.domainDepth,
       fillerWords: item.fillerWordsCount,
       speakingSpeedWpm: item.speakingSpeedWpm,
     })),

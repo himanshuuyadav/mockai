@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { ReportCharts } from "@/components/report/report-charts";
+import { MetricCard } from "@/components/ui/metric-card";
+import { PageContainer } from "@/components/ui/page-container";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SectionLayout } from "@/components/ui/section-layout";
+import { TimelineItem } from "@/components/ui/timeline-item";
 import { auth } from "@/lib/auth";
 import { getInterviewReportBySessionId } from "@/services/interview.service";
 
@@ -10,62 +15,52 @@ function highlightFillerWords(text: string) {
   if (!text) {
     return [];
   }
-
   const pattern = new RegExp(`\\b(${FILLER_WORDS.map((word) => word.replace(" ", "\\s+")).join("|")})\\b`, "gi");
   const parts = text.split(pattern);
-
   return parts.map((part, index) => {
     const isFiller = FILLER_WORDS.some((word) => new RegExp(`^${word.replace(" ", "\\s+")}$`, "i").test(part));
-    if (!isFiller) {
-      return <span key={`${part}-${index}`}>{part}</span>;
-    }
-    return (
-      <mark className="rounded bg-yellow-200 px-1" key={`${part}-${index}`}>
+    return isFiller ? (
+      <mark className="rounded bg-amber-100 px-1 text-amber-900" key={`${part}-${index}`}>
         {part}
       </mark>
+    ) : (
+      <span key={`${part}-${index}`}>{part}</span>
     );
   });
 }
 
 type ReportPageProps = {
-  searchParams?: {
-    sessionId?: string;
-  };
+  searchParams?: { sessionId?: string };
 };
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
   const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  if (!session?.user?.id) redirect("/login");
 
   const sessionId = searchParams?.sessionId;
-
   if (!sessionId) {
     return (
-      <main className="container py-10">
-        <h1 className="text-3xl font-semibold tracking-tight">Interview Report</h1>
-        <p className="mt-2 text-slate-600">No session selected. End an interview to view its report.</p>
-      </main>
+      <PageContainer>
+        <section className="panel p-8">
+          <SectionHeader eyebrow="Report" title="No interview selected" description="End an interview to generate a report." />
+        </section>
+      </PageContainer>
     );
   }
 
-  const report = await getInterviewReportBySessionId({
-    sessionId,
-    userId: session.user.id,
-  });
-
+  const report = await getInterviewReportBySessionId({ sessionId, userId: session.user.id });
   if (!report) {
     return (
-      <main className="container py-10">
-        <h1 className="text-3xl font-semibold tracking-tight">Interview Report</h1>
-        <p className="mt-2 text-slate-600">Report not found for this session.</p>
-      </main>
+      <PageContainer>
+        <section className="panel p-8">
+          <SectionHeader eyebrow="Report" title="Report not found" />
+        </section>
+      </PageContainer>
     );
   }
 
   const finalReport = report.finalReport;
+  const depthLabel = finalReport?.domainDepthLabel || (report.type === "hr" ? "Behavioral Depth" : "Technical Depth");
   const answers = report.transcripts
     .map((transcript, index) => ({
       transcript,
@@ -77,72 +72,54 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     .filter((item) => item.transcript);
 
   return (
-    <main className="container space-y-6 py-10">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Interview Report</h1>
-        <p className="mt-2 text-slate-600">
-          Session status: {report.status} {report.endReason ? `(${report.endReason})` : ""}
-        </p>
-      </header>
+    <PageContainer className="space-y-8">
+      <SectionHeader
+        eyebrow="Interview Report"
+        title="Session Analysis"
+        description={`Status: ${report.status}${report.endReason ? ` (${report.endReason})` : ""}`}
+      />
 
       <section className="grid gap-4 md:grid-cols-4">
-        <article className="rounded-xl border bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Confidence</p>
-          <p className="mt-2 text-2xl font-semibold">{finalReport?.confidenceScore ?? 0}</p>
-        </article>
-        <article className="rounded-xl border bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Speaking Speed</p>
-          <p className="mt-2 text-2xl font-semibold">{finalReport?.speakingSpeedWpm ?? 0} WPM</p>
-        </article>
-        <article className="rounded-xl border bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Technical Depth</p>
-          <p className="mt-2 text-2xl font-semibold">{finalReport?.technicalDepth ?? 0}</p>
-        </article>
-        <article className="rounded-xl border bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Filler Words</p>
-          <p className="mt-2 text-2xl font-semibold">{finalReport?.fillerWordsCount ?? 0}</p>
-        </article>
+        <MetricCard label="Confidence Score" value={`${finalReport?.confidenceScore ?? 0}`} />
+        <MetricCard label="Speaking Speed" value={`${finalReport?.speakingSpeedWpm ?? 0} WPM`} />
+        <MetricCard label={depthLabel} value={`${finalReport?.domainDepth ?? 0}`} />
+        <MetricCard label="Filler Words" value={`${finalReport?.fillerWordsCount ?? 0}`} />
       </section>
 
-      <ReportCharts timelineMarkers={finalReport?.timelineMarkers ?? []} />
+      <ReportCharts depthLabel={depthLabel} timelineMarkers={finalReport?.timelineMarkers ?? []} />
 
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">Improvement Suggestions</h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-700">
-          {(finalReport?.improvementSuggestions ?? []).map((suggestion, index) => (
-            <li key={`${suggestion}-${index}`}>{suggestion}</li>
-          ))}
-        </ul>
-      </section>
+      <SectionLayout>
+        <SectionHeader eyebrow="Suggestions" title="Improvement Insights" />
+        <article className="panel p-6">
+          <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
+            {(finalReport?.improvementSuggestions ?? []).map((suggestion, index) => (
+              <li key={`${suggestion}-${index}`}>{suggestion}</li>
+            ))}
+          </ul>
+        </article>
+      </SectionLayout>
 
-      <section className="space-y-4">
+      <SectionLayout>
+        <SectionHeader eyebrow="Timeline" title="Question feedback timeline" />
         {answers.map((item, index) => (
-          <article className="rounded-xl border bg-white p-6" key={`answer-${index}`}>
-            <p className="text-xs uppercase text-slate-500">Question {index + 1}</p>
-            <p className="mt-1 text-sm font-medium">{item.question}</p>
+          <TimelineItem
+            body={item.feedback}
+            key={`timeline-${index}`}
+            subtitle={`Score ${item.score} · Confidence ${item.analysis?.confidenceScore ?? 0}`}
+            title={`Q${index + 1}: ${item.question}`}
+          />
+        ))}
+      </SectionLayout>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <p className="text-sm">
-                <span className="font-medium">Score:</span> {item.score}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Confidence:</span> {item.analysis?.confidenceScore ?? 0}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Clarity:</span> {item.analysis?.sentenceClarity ?? 0}
-              </p>
-            </div>
-
-            <div className="mt-3 rounded-md border bg-slate-50 p-3 text-sm leading-relaxed">
-              {highlightFillerWords(item.transcript)}
-            </div>
-
-            <p className="mt-3 text-sm text-slate-700">
-              <span className="font-medium">AI Feedback:</span> {item.feedback}
-            </p>
+      <SectionLayout>
+        <SectionHeader eyebrow="Transcript" title="Transcript with filler highlights" />
+        {answers.map((item, index) => (
+          <article className="panel p-4" key={`transcript-${index}`}>
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Answer {index + 1}</p>
+            <p className="text-sm leading-relaxed text-slate-700">{highlightFillerWords(item.transcript)}</p>
           </article>
         ))}
-      </section>
-    </main>
+      </SectionLayout>
+    </PageContainer>
   );
 }

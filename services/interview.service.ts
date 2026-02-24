@@ -137,7 +137,7 @@ export async function submitInterviewAnswerAndGenerateFollowUp(input: SubmitInte
     videoUrl = upload.secureUrl;
   }
 
-  const analysis = analyzeInterviewAnswer(input.transcript);
+  const analysis = analyzeInterviewAnswer(input.transcript, session.type as InterviewType);
   const followUp = await generateFollowUpQuestion({
     structuredResume: resume.structuredData,
     previousQuestion,
@@ -178,6 +178,8 @@ export async function endInterviewSession(input: {
   sessionId: string;
   userId: string;
   reason: "manual" | "auto_time_limit";
+  transcript?: string;
+  videoFile?: File;
 }) {
   await connectToDatabase();
 
@@ -198,8 +200,38 @@ export async function endInterviewSession(input: {
     };
   }
 
+  const currentQuestionIndex = Math.max((session.questions as string[]).length - 1, 0);
+  const existingAnswer = ((session.answers as string[])[currentQuestionIndex] ?? "").trim();
+  const draftTranscript = (input.transcript ?? "").trim();
+
+  if (!existingAnswer && draftTranscript) {
+    let videoUrl = (session.answerVideoUrls as string[])[currentQuestionIndex] ?? "";
+
+    if (input.videoFile && !videoUrl) {
+      const videoBuffer = Buffer.from(await input.videoFile.arrayBuffer());
+      const upload = await uploadInterviewVideoToCloudinary({
+        fileBuffer: videoBuffer,
+        userId: input.userId,
+        sessionId: session._id.toString(),
+        questionIndex: currentQuestionIndex,
+      });
+      videoUrl = upload.secureUrl;
+    }
+
+    const analysis = analyzeInterviewAnswer(draftTranscript, session.type as InterviewType);
+    const derivedScore = Math.round((analysis.confidenceScore + analysis.domainDepth + analysis.sentenceClarity) / 3);
+    const derivedFeedback = analysis.improvementSuggestions.slice(0, 2).join(" ");
+
+    (session.answers as string[])[currentQuestionIndex] = draftTranscript;
+    (session.transcripts as string[])[currentQuestionIndex] = draftTranscript;
+    (session.scores as number[])[currentQuestionIndex] = derivedScore;
+    (session.feedbacks as string[])[currentQuestionIndex] = derivedFeedback;
+    (session.answerVideoUrls as string[])[currentQuestionIndex] = videoUrl;
+    (session.analysisReports as unknown[])[currentQuestionIndex] = analysis;
+  }
+
   const savedAnalyses = extractSavedAnalyses(session);
-  const finalReport = buildFinalInterviewReport(savedAnalyses);
+  const finalReport = buildFinalInterviewReport(savedAnalyses, session.type as InterviewType);
 
   session.finalReport = finalReport;
   session.status = "ended";

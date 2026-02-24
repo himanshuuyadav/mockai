@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { StartInterviewForm } from "@/components/interview/start-interview-form";
+import { PageContainer } from "@/components/ui/page-container";
+import { SectionHeader } from "@/components/ui/section-header";
 import { auth } from "@/lib/auth";
 import { getLatestResumeRecordByUserId } from "@/services/resume.service";
 
@@ -14,16 +16,17 @@ export default async function InterviewPage() {
   const latestResume = await getLatestResumeRecordByUserId(session.user.id);
 
   return (
-    <main className="container py-10">
-      <h1 className="text-3xl font-semibold tracking-tight">Interview Workspace</h1>
-      <p className="mt-2 text-slate-600">Start a technical or HR interview based on your latest resume.</p>
+    <PageContainer className="space-y-6">
+      <SectionHeader
+        eyebrow="Interview Room"
+        title="Live Interview Workspace"
+        description="Focused interface for question flow, transcript capture, and answer submission."
+      />
 
-      <section className="mt-8">
-        <StartInterviewForm
-          canStart={Boolean(latestResume)}
-          userTier={session.user.subscriptionTier ?? "free"}
-        />
-      </section>
-    </main>
+      <StartInterviewForm
+        canStart={Boolean(latestResume)}
+        userTier={session.user.subscriptionTier ?? "free"}
+      />
+    </PageContainer>
   );
 }

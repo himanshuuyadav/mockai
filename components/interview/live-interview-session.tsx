@@ -128,17 +128,30 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
       setError(null);
 
       try {
+        let answerVideo: Blob | null = null;
         if (isRecording) {
           recognitionRef.current?.stop();
-          await stopRecording();
+          answerVideo = await stopRecording();
           setIsRecording(false);
+        } else if (chunksRef.current.length) {
+          answerVideo = new Blob(chunksRef.current, { type: "video/webm" });
         }
+
+        const transcriptText = `${finalTranscript} ${liveTranscript}`.trim();
         cleanupMedia();
+
+        const formData = new FormData();
+        formData.append("reason", reason);
+        if (transcriptText) {
+          formData.append("transcript", transcriptText);
+        }
+        if (answerVideo) {
+          formData.append("video", answerVideo, `answer-${Date.now()}.webm`);
+        }
 
         const response = await fetch(`/api/interview/session/${sessionId}/end`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason }),
+          body: formData,
         });
 
         const payload = (await response.json()) as { error?: string };
@@ -152,7 +165,7 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
         setError(endError instanceof Error ? endError.message : "Unable to end interview.");
       }
     },
-    [cleanupMedia, isRecording, router, sessionId, stopRecording],
+    [cleanupMedia, finalTranscript, isRecording, liveTranscript, router, sessionId, stopRecording],
   );
 
   useEffect(() => {
@@ -311,13 +324,13 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
   }
 
   return (
-    <section className="space-y-4 rounded-xl border bg-white p-6">
+    <section className="panel space-y-4 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Current AI Question</p>
           <p className="mt-1 text-base font-medium">{currentQuestion}</p>
         </div>
-        <div className="rounded-md border bg-slate-50 px-3 py-1 text-sm font-medium">
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
           Timer: {formatTimer(elapsedSeconds)}
         </div>
       </div>
@@ -328,8 +341,11 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <p className="text-sm font-medium">Camera Preview</p>
-          <video className="aspect-video w-full rounded-md border bg-black object-cover" muted ref={videoRef} />
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Camera Preview</p>
+            {isRecording ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-400" /> : null}
+          </div>
+          <video className="aspect-video w-full rounded-md border border-slate-200 bg-black object-cover" muted ref={videoRef} />
           <Button onClick={handleToggleRecording} type="button">
             {isRecording ? "Stop Recording" : "Start Recording"}
           </Button>
@@ -338,7 +354,7 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
         <div className="space-y-2">
           <p className="text-sm font-medium">Live Transcript</p>
           <textarea
-            className="min-h-48 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="min-h-48 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
             onChange={(event) => {
               setFinalTranscript(event.target.value);
               setLiveTranscript("");
@@ -350,7 +366,7 @@ export function LiveInterviewSession({ sessionId, initialQuestion, isFreeUser }:
       </div>
 
       {lastScore !== null ? (
-        <div className="rounded-md border bg-slate-50 p-3">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-medium">Last Answer Score: {lastScore}/100</p>
           <p className="mt-1 text-sm text-slate-700">{lastFeedback}</p>
         </div>

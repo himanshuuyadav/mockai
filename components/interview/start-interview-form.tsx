@@ -60,8 +60,8 @@ export function StartInterviewForm({
 
   if (!canStart) {
     return (
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">Start Interview</h2>
+      <section className="panel p-6">
+        <h2 className="text-lg font-semibold text-slate-900">Start Interview</h2>
         <p className="mt-2 text-sm text-slate-600">
           Upload at least one resume before starting an interview session.
         </p>
@@ -70,10 +70,10 @@ export function StartInterviewForm({
   }
 
   return (
-    <section className="space-y-4 rounded-xl border bg-white p-6">
+    <section className="panel space-y-4 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Start Interview</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Start Interview</h2>
           <p className="mt-1 text-sm text-slate-600">Choose interview type and begin a new session.</p>
         </div>
         <Button onClick={() => setShowForm((prev) => !prev)} type="button">
@@ -88,7 +88,7 @@ export function StartInterviewForm({
               Interview Type
             </label>
             <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
               id="interview-type"
               onChange={(event) => setType(event.target.value as InterviewType)}
               value={type}
@@ -103,7 +103,7 @@ export function StartInterviewForm({
               JD Info (Optional)
             </label>
             <textarea
-              className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="min-h-28 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
               id="jd-info"
               onChange={(event) => setJdInfo(event.target.value)}
               placeholder="Paste job description, role expectations, or key requirements..."
@@ -121,11 +121,11 @@ export function StartInterviewForm({
 
       {sessionData ? (
         <div className="space-y-4">
-          <article className="rounded-md border bg-slate-50 p-4">
+          <article className="rounded-md border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm text-slate-500">
               Session #{sessionData.id.slice(-6)} - {sessionData.type === "technical" ? "Technical" : "HR"}
             </p>
-            <p className="mt-2 font-medium">{sessionData.questions[0]}</p>
+            <p className="mt-2 font-medium text-slate-900">{sessionData.questions[0]}</p>
           </article>
           <LiveInterviewSession
             initialQuestion={sessionData.questions[0]}

@@ -1,4 +1,5 @@
 import { connectToDatabase } from "@/lib/db";
+import { InterviewSession } from "@/models/InterviewSession";
 import { User } from "@/models/User";
 
 type SyncOAuthUserInput = {
@@ -44,4 +45,35 @@ export async function findUserProfileById(userId: string) {
       subscriptionTier: "free" | "pro" | "enterprise";
       createdAt: Date;
     } | null>();
+}
+
+export async function getUserUsageStats(userId: string) {
+  await connectToDatabase();
+
+  const sessions = await InterviewSession.find({ userId })
+    .sort({ createdAt: -1 })
+    .select("type status createdAt finalReport")
+    .lean<
+      Array<{
+        type: "technical" | "hr";
+        status: "active" | "ended";
+        createdAt: Date;
+        finalReport?: {
+          confidenceScore?: number;
+        } | null;
+      }>
+    >();
+
+  const ended = sessions.filter((session) => session.status === "ended");
+
+  return {
+    totalSessions: sessions.length,
+    completedSessions: ended.length,
+    avgConfidence: ended.length
+      ? Math.round(
+          ended.reduce((sum, session) => sum + (session.finalReport?.confidenceScore ?? 0), 0) / ended.length,
+        )
+      : 0,
+    recentSessions: sessions.slice(0, 6),
+  };
 }

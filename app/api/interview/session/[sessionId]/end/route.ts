@@ -19,13 +19,40 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const payload = endInterviewSchema.parse(body);
+    const contentType = request.headers.get("content-type") || "";
+
+    let reason: "manual" | "auto_time_limit" = "manual";
+    let transcript: string | undefined;
+    let videoFile: File | undefined;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const payload = endInterviewSchema.parse({
+        reason: formData.get("reason"),
+      });
+      reason = payload.reason;
+
+      const transcriptValue = formData.get("transcript");
+      if (typeof transcriptValue === "string" && transcriptValue.trim()) {
+        transcript = transcriptValue.trim();
+      }
+
+      const videoValue = formData.get("video");
+      if (videoValue instanceof File) {
+        videoFile = videoValue;
+      }
+    } else {
+      const body = await request.json().catch(() => ({}));
+      const payload = endInterviewSchema.parse(body);
+      reason = payload.reason;
+    }
 
     const ended = await endInterviewSession({
       sessionId: params.sessionId,
       userId: session.user.id,
-      reason: payload.reason,
+      reason,
+      transcript,
+      videoFile,
     });
 
     return NextResponse.json(ended);

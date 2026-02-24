@@ -1,53 +1,62 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { ResumeUploadForm } from "@/components/resume/resume-upload-form";
-import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/ui/page-container";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SectionLayout } from "@/components/ui/section-layout";
 import { auth } from "@/lib/auth";
 import { getLatestResumeByUserId } from "@/services/resume.service";
 
 export default async function ResumePage() {
   const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  if (!session?.user?.id) redirect("/login");
 
   const latestResume = await getLatestResumeByUserId(session.user.id);
 
   return (
-    <main className="container py-10">
-      <h1 className="text-3xl font-semibold tracking-tight">Resume Dashboard</h1>
-      <p className="mt-2 text-slate-600">Upload your resume and review structured insights.</p>
+    <PageContainer className="space-y-8">
+      <SectionHeader
+        eyebrow="Resume"
+        title="Structured resume workspace"
+        description="Upload and inspect extracted signals used throughout interview rounds."
+      />
 
-      <section className="mt-6 flex flex-wrap gap-3">
+      <section className="flex flex-wrap gap-3">
         {latestResume?.originalFileUrl ? (
           <>
-            <Button asChild variant="outline">
-              <a href="/api/resume/latest/view" rel="noreferrer noopener" target="_blank">
-                View Uploaded Resume
-              </a>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="#resume-upload">Update Resume</Link>
-            </Button>
+            <a
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              href="/api/resume/latest/view"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              View Uploaded Resume
+            </a>
+            <Link
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              href="#resume-upload"
+            >
+              Update Resume
+            </Link>
           </>
         ) : (
-          <Button asChild variant="outline">
-            <Link href="#resume-upload">Upload Resume</Link>
-          </Button>
+          <Link
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            href="#resume-upload"
+          >
+            Upload Resume
+          </Link>
         )}
       </section>
 
-      <section className="mt-8">
-        <ResumeUploadForm />
-      </section>
+      <ResumeUploadForm />
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
-        <article className="rounded-xl border bg-white p-6">
-          <h2 className="text-lg font-semibold">Skills</h2>
+      <SectionLayout className="grid gap-4 lg:grid-cols-3">
+        <article className="panel p-5">
+          <h3 className="text-base font-semibold text-slate-900">Skills</h3>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            {(latestResume?.structuredData.skills || []).length ? (
+            {(latestResume?.structuredData.skills ?? []).length ? (
               latestResume?.structuredData.skills.map((skill, index) => <li key={`${skill}-${index}`}>- {skill}</li>)
             ) : (
               <li className="text-slate-500">No skills extracted yet.</li>
@@ -55,31 +64,29 @@ export default async function ResumePage() {
           </ul>
         </article>
 
-        <article className="rounded-xl border bg-white p-6 md:col-span-2">
-          <h2 className="text-lg font-semibold">Projects</h2>
-          <div className="mt-3 space-y-3">
-            {(latestResume?.structuredData.projects || []).length ? (
-              latestResume?.structuredData.projects.map((project, index) => (
-                <div className="rounded-md border p-3" key={`${project.name}-${index}`}>
-                  <p className="font-medium">{project.name || "Untitled Project"}</p>
-                  <p className="mt-1 text-sm text-slate-600">{project.description || "No description"}</p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Tech: {(project.tech || []).length ? project.tech.join(", ") : "N/A"}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-500">No projects extracted yet.</p>
-            )}
-          </div>
+        <article className="panel space-y-3 p-5 lg:col-span-2">
+          <h3 className="text-base font-semibold text-slate-900">Projects</h3>
+          {(latestResume?.structuredData.projects ?? []).length ? (
+            latestResume?.structuredData.projects.map((project, index) => (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3" key={`${project.name}-${index}`}>
+                <p className="text-sm font-semibold text-slate-900">{project.name || "Untitled Project"}</p>
+                <p className="mt-1 text-sm text-slate-700">{project.description || "No description"}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Tech: {(project.tech ?? []).length ? project.tech.join(", ") : "N/A"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">No projects extracted yet.</p>
+          )}
         </article>
-      </section>
+      </SectionLayout>
 
-      <section className="mt-4 grid gap-4 md:grid-cols-2">
-        <article className="rounded-xl border bg-white p-6">
-          <h2 className="text-lg font-semibold">Achievements</h2>
+      <SectionLayout className="grid gap-4 lg:grid-cols-2">
+        <article className="panel p-5">
+          <h3 className="text-base font-semibold text-slate-900">Achievements</h3>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            {(latestResume?.structuredData.achievements || []).length ? (
+            {(latestResume?.structuredData.achievements ?? []).length ? (
               latestResume?.structuredData.achievements.map((achievement, index) => (
                 <li key={`${achievement}-${index}`}>- {achievement}</li>
               ))
@@ -89,41 +96,37 @@ export default async function ResumePage() {
           </ul>
         </article>
 
-        <article className="rounded-xl border bg-white p-6">
-          <h2 className="text-lg font-semibold">Extracurricular / Voluntary Experience</h2>
-          <div className="mt-3 space-y-3">
-            {(latestResume?.structuredData.extracurricularExperience || []).length ? (
-              latestResume?.structuredData.extracurricularExperience.map((item, index) => (
-                <div className="rounded-md border p-3" key={`${item.activity}-${item.organization}-${index}`}>
-                  <p className="font-medium">{item.activity || "N/A"}</p>
-                  <p className="text-sm text-slate-600">{item.organization || "N/A"}</p>
-                  <p className="text-xs text-slate-500">{item.duration || "N/A"}</p>
-                  <p className="mt-2 text-sm text-slate-600">{item.description || "No description"}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-500">No extracurricular or voluntary entries extracted yet.</p>
-            )}
-          </div>
-        </article>
-      </section>
-
-      <section className="mt-4 rounded-xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">Experience</h2>
-        <div className="mt-3 space-y-3">
-          {(latestResume?.structuredData.experience || []).length ? (
-            latestResume?.structuredData.experience.map((item, index) => (
-              <div className="rounded-md border p-3" key={`${item.role}-${item.company}-${index}`}>
-                <p className="font-medium">{item.role || "N/A"}</p>
-                <p className="text-sm text-slate-600">{item.company || "N/A"}</p>
+        <article className="panel space-y-3 p-5">
+          <h3 className="text-base font-semibold text-slate-900">Extracurricular / Voluntary Experience</h3>
+          {(latestResume?.structuredData.extracurricularExperience ?? []).length ? (
+            latestResume?.structuredData.extracurricularExperience.map((item, index) => (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3" key={`${item.activity}-${index}`}>
+                <p className="text-sm font-semibold text-slate-900">{item.activity || "N/A"}</p>
+                <p className="text-sm text-slate-700">{item.organization || "N/A"}</p>
                 <p className="text-xs text-slate-500">{item.duration || "N/A"}</p>
+                <p className="mt-2 text-sm text-slate-700">{item.description || "No description"}</p>
               </div>
             ))
           ) : (
-            <p className="text-sm text-slate-500">No experience extracted yet.</p>
+            <p className="text-sm text-slate-500">No extracurricular or voluntary entries extracted yet.</p>
           )}
-        </div>
-      </section>
-    </main>
+        </article>
+      </SectionLayout>
+
+      <article className="panel space-y-3 p-5">
+        <h3 className="text-base font-semibold text-slate-900">Experience</h3>
+        {(latestResume?.structuredData.experience ?? []).length ? (
+          latestResume?.structuredData.experience.map((item, index) => (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3" key={`${item.role}-${item.company}-${index}`}>
+              <p className="text-sm font-semibold text-slate-900">{item.role || "N/A"}</p>
+              <p className="text-sm text-slate-700">{item.company || "N/A"}</p>
+              <p className="text-xs text-slate-500">{item.duration || "N/A"}</p>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-slate-500">No experience extracted yet.</p>
+        )}
+      </article>
+    </PageContainer>
   );
 }

@@ -55,12 +55,17 @@ export function ResumeUploadForm() {
   }
 
   return (
-    <form className="rounded-xl border bg-white p-6" id="resume-upload" onSubmit={handleSubmit}>
-      <h2 className="text-lg font-semibold">Upload Resume</h2>
+    <form className="panel p-6" id="resume-upload" onSubmit={handleSubmit}>
+      <h2 className="text-lg font-semibold text-slate-900">Upload Resume</h2>
       <p className="mt-1 text-sm text-slate-600">Accepted formats: PDF, DOCX. Max size: 5MB.</p>
 
       <div className="mt-4 space-y-3">
-        <input accept={ACCEPTED_TYPES} onChange={handleFileChange} type="file" />
+        <input
+          accept={ACCEPTED_TYPES}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-500"
+          onChange={handleFileChange}
+          type="file"
+        />
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </div>
 
