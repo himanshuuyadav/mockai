@@ -55,7 +55,7 @@ export function ResumeUploadForm() {
   }
 
   return (
-    <form className="rounded-xl border bg-white p-6" onSubmit={handleSubmit}>
+    <form className="rounded-xl border bg-white p-6" id="resume-upload" onSubmit={handleSubmit}>
       <h2 className="text-lg font-semibold">Upload Resume</h2>
       <p className="mt-1 text-sm text-slate-600">Accepted formats: PDF, DOCX. Max size: 5MB.</p>
 

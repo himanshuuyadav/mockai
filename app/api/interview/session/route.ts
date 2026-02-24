@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       type: payload.type,
       jdInfo: payload.jdInfo?.trim() || "",
       structuredResume: latestResume.structuredData,
+      subscriptionTier: session.user.subscriptionTier ?? "free",
     });
 
     return NextResponse.json(createdSession);

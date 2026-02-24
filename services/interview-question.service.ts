@@ -41,3 +41,78 @@ export async function generateContextualInterviewQuestion(input: GenerateIntervi
 
   return getGeminiResponseText(response).replace(/^\d+[\).\s-]*/, "").trim();
 }
+
+type GenerateFollowUpQuestionInput = {
+  structuredResume: StructuredResumeData;
+  previousQuestion: string;
+  userTranscriptAnswer: string;
+  type: InterviewType;
+  jdInfo?: string;
+};
+
+type FollowUpResult = {
+  score: number;
+  feedback: string;
+  followUpQuestion: string;
+};
+
+function normalizeScore(score: unknown) {
+  const numeric = typeof score === "number" ? score : Number(score);
+  if (Number.isNaN(numeric)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+export async function generateFollowUpQuestion(
+  input: GenerateFollowUpQuestionInput,
+): Promise<FollowUpResult> {
+  const modeGuide =
+    input.type === "technical"
+      ? "Technical mode: evaluate technical clarity, project depth, tradeoff thinking, and system design understanding."
+      : "HR mode: evaluate behavioral depth, leadership, conflict handling, communication, and self-awareness.";
+
+  const prompt = [
+    "You are simulating a real interviewer.",
+    "Return strict JSON only with keys: score, feedback, followUpQuestion.",
+    "score must be an integer 0-100.",
+    "feedback must be concise (max 2 sentences).",
+    "followUpQuestion must be one clear interviewer question.",
+    modeGuide,
+    input.jdInfo ? `JD context:\n${input.jdInfo}` : "JD context: not provided.",
+    `Previous question:\n${input.previousQuestion}`,
+    `Candidate answer transcript:\n${input.userTranscriptAnswer}`,
+    `Structured resume:\n${JSON.stringify(input.structuredResume)}`,
+  ].join("\n\n");
+
+  const response = await getGeminiClient().models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  const raw = getGeminiResponseText(response);
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+
+  if (start === -1 || end === -1) {
+    throw new Error("Gemini did not return valid follow-up JSON.");
+  }
+
+  const parsed = JSON.parse(raw.slice(start, end + 1)) as {
+    score?: unknown;
+    feedback?: unknown;
+    followUpQuestion?: unknown;
+  };
+
+  return {
+    score: normalizeScore(parsed.score),
+    feedback: typeof parsed.feedback === "string" ? parsed.feedback.trim() : "No feedback available.",
+    followUpQuestion:
+      typeof parsed.followUpQuestion === "string" && parsed.followUpQuestion.trim()
+        ? parsed.followUpQuestion.trim()
+        : "Can you elaborate further on that example?",
+  };
+}

@@ -19,7 +19,10 @@ export default async function InterviewPage() {
       <p className="mt-2 text-slate-600">Start a technical or HR interview based on your latest resume.</p>
 
       <section className="mt-8">
-        <StartInterviewForm canStart={Boolean(latestResume)} />
+        <StartInterviewForm
+          canStart={Boolean(latestResume)}
+          userTier={session.user.subscriptionTier ?? "free"}
+        />
       </section>
     </main>
   );

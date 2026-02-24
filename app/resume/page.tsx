@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { ResumeUploadForm } from "@/components/resume/resume-upload-form";
+import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { getLatestResumeByUserId } from "@/services/resume.service";
 
@@ -17,6 +19,25 @@ export default async function ResumePage() {
     <main className="container py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Resume Dashboard</h1>
       <p className="mt-2 text-slate-600">Upload your resume and review structured insights.</p>
+
+      <section className="mt-6 flex flex-wrap gap-3">
+        {latestResume?.originalFileUrl ? (
+          <>
+            <Button asChild variant="outline">
+              <a href="/api/resume/latest/view" rel="noreferrer noopener" target="_blank">
+                View Uploaded Resume
+              </a>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="#resume-upload">Update Resume</Link>
+            </Button>
+          </>
+        ) : (
+          <Button asChild variant="outline">
+            <Link href="#resume-upload">Upload Resume</Link>
+          </Button>
+        )}
+      </section>
 
       <section className="mt-8">
         <ResumeUploadForm />

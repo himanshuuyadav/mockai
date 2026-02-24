@@ -9,6 +9,13 @@ type UploadResumeFileInput = {
   userId: string;
 };
 
+type UploadInterviewVideoInput = {
+  fileBuffer: Buffer;
+  userId: string;
+  sessionId: string;
+  questionIndex: number;
+};
+
 function ensureCloudinaryConfig() {
   getRequiredEnv("CLOUDINARY_CLOUD_NAME");
   getRequiredEnv("CLOUDINARY_API_KEY");
@@ -27,6 +34,8 @@ export async function uploadResumeFileToCloudinary({
       {
         folder: `mockai/resumes/${userId}`,
         resource_type: "raw",
+        type: "upload",
+        access_mode: "public",
         public_id: `${Date.now()}-${fileName.replace(/\s+/g, "-")}`,
         use_filename: true,
       },
@@ -41,5 +50,57 @@ export async function uploadResumeFileToCloudinary({
     );
 
     Readable.from(fileBuffer).pipe(uploadStream);
+  });
+}
+
+export async function uploadInterviewVideoToCloudinary({
+  fileBuffer,
+  userId,
+  sessionId,
+  questionIndex,
+}: UploadInterviewVideoInput) {
+  ensureCloudinaryConfig();
+
+  return new Promise<{ secureUrl: string }>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `mockai/interviews/${userId}/${sessionId}`,
+        resource_type: "video",
+        public_id: `q-${questionIndex + 1}-${Date.now()}`,
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error ?? new Error("Cloudinary video upload failed"));
+          return;
+        }
+
+        resolve({ secureUrl: result.secure_url });
+      },
+    );
+
+    Readable.from(fileBuffer).pipe(uploadStream);
+  });
+}
+
+function extractCloudinaryRawPublicId(originalFileUrl: string) {
+  const match = originalFileUrl.match(/\/raw\/upload\/(?:v\d+\/)?(.+)$/);
+  if (!match?.[1]) {
+    throw new Error("Unable to parse Cloudinary raw URL.");
+  }
+
+  // For raw assets, the extension is part of the public_id.
+  return decodeURIComponent(match[1]);
+}
+
+export function getSignedResumeViewUrl(originalFileUrl: string) {
+  ensureCloudinaryConfig();
+
+  const publicId = extractCloudinaryRawPublicId(originalFileUrl);
+  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 10;
+
+  return cloudinary.utils.private_download_url(publicId, "", {
+    resource_type: "raw",
+    type: "upload",
+    expires_at: expiresAt,
   });
 }

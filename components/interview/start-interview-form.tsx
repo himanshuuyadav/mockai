@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { LiveInterviewSession } from "@/components/interview/live-interview-session";
 import { Button } from "@/components/ui/button";
 
 type InterviewType = "technical" | "hr";
@@ -10,10 +11,17 @@ type CreateSessionResponse = {
   id: string;
   type: InterviewType;
   questions: string[];
+  subscriptionTier: "free" | "pro" | "enterprise";
   createdAt: string;
 };
 
-export function StartInterviewForm({ canStart }: { canStart: boolean }) {
+export function StartInterviewForm({
+  canStart,
+  userTier,
+}: {
+  canStart: boolean;
+  userTier: "free" | "pro" | "enterprise";
+}) {
   const [showForm, setShowForm] = useState(false);
   const [type, setType] = useState<InterviewType>("technical");
   const [jdInfo, setJdInfo] = useState("");
@@ -37,7 +45,6 @@ export function StartInterviewForm({ canStart }: { canStart: boolean }) {
       });
 
       const payload = (await response.json()) as CreateSessionResponse & { error?: string };
-
       if (!response.ok) {
         throw new Error(payload.error || "Unable to start interview.");
       }
@@ -113,12 +120,19 @@ export function StartInterviewForm({ canStart }: { canStart: boolean }) {
       ) : null}
 
       {sessionData ? (
-        <article className="rounded-md border bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">
-            Session #{sessionData.id.slice(-6)} · {sessionData.type === "technical" ? "Technical" : "HR"}
-          </p>
-          <p className="mt-2 font-medium">{sessionData.questions[0]}</p>
-        </article>
+        <div className="space-y-4">
+          <article className="rounded-md border bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">
+              Session #{sessionData.id.slice(-6)} - {sessionData.type === "technical" ? "Technical" : "HR"}
+            </p>
+            <p className="mt-2 font-medium">{sessionData.questions[0]}</p>
+          </article>
+          <LiveInterviewSession
+            initialQuestion={sessionData.questions[0]}
+            isFreeUser={(sessionData.subscriptionTier || userTier) === "free"}
+            sessionId={sessionData.id}
+          />
+        </div>
       ) : null}
     </section>
   );
