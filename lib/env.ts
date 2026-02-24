@@ -8,6 +8,9 @@ const requiredServerEnv = [
   "CLOUDINARY_CLOUD_NAME",
   "CLOUDINARY_API_KEY",
   "CLOUDINARY_API_SECRET",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_PRO_PRICE_ID",
+  "STRIPE_WEBHOOK_SECRET",
 ] as const;
 
 type RequiredServerEnvKey = (typeof requiredServerEnv)[number];

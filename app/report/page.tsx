@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { ReportCharts } from "@/components/report/report-charts";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -42,6 +43,14 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     return (
       <PageContainer>
         <section className="panel p-8">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/dashboard">
+              Back to Dashboard
+            </Link>
+            <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/">
+              Home
+            </Link>
+          </div>
           <SectionHeader eyebrow="Report" title="No interview selected" description="End an interview to generate a report." />
         </section>
       </PageContainer>
@@ -53,6 +62,14 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     return (
       <PageContainer>
         <section className="panel p-8">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/dashboard">
+              Back to Dashboard
+            </Link>
+            <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/">
+              Home
+            </Link>
+          </div>
           <SectionHeader eyebrow="Report" title="Report not found" />
         </section>
       </PageContainer>
@@ -73,6 +90,15 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
   return (
     <PageContainer className="space-y-8">
+      <div className="flex flex-wrap gap-2">
+        <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/dashboard">
+          Back to Dashboard
+        </Link>
+        <Link className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50" href="/">
+          Home
+        </Link>
+      </div>
+
       <SectionHeader
         eyebrow="Interview Report"
         title="Session Analysis"

@@ -6,7 +6,7 @@ const interviewSessionSchema = new Schema(
     resumeId: { type: Schema.Types.ObjectId, ref: "Resume", required: true, index: true },
     subscriptionTier: {
       type: String,
-      enum: ["free", "pro", "enterprise"],
+      enum: ["free", "pro"],
       default: "free",
       index: true,
     },

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { LogoutButton } from "@/components/auth/logout-button";
+import { BillingStatusBanner } from "@/components/dashboard/billing-status-banner";
 import { PerformanceTrendChart } from "@/components/dashboard/performance-trend-chart";
 import { CleanButton } from "@/components/ui/clean-button";
 import { DashboardGrid } from "@/components/ui/dashboard-grid";
@@ -11,14 +12,25 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { SectionLayout } from "@/components/ui/section-layout";
 import { auth } from "@/lib/auth";
 import { getDashboardData } from "@/services/dashboard.service";
+import { findUserProfileById, syncMonthlyInterviewAllowance } from "@/services/user.service";
 
-export async function DashboardShell() {
+export async function DashboardShell({
+  billingStatus,
+}: {
+  billingStatus?: "success" | "cancelled";
+}) {
   const session = await auth();
+  if (session?.user?.id) {
+    await syncMonthlyInterviewAllowance(session.user.id);
+  }
   const data = session?.user?.id ? await getDashboardData(session.user.id) : null;
+  const profile = session?.user?.id ? await findUserProfileById(session.user.id) : null;
   const usagePercent = Math.min(100, Math.round(((data?.endedSessions ?? 0) / Math.max(1, data?.totalSessions ?? 1)) * 100));
 
   return (
     <PageContainer className="space-y-8 pt-10">
+      {billingStatus ? <BillingStatusBanner status={billingStatus} /> : null}
+
       <header className="panel flex flex-wrap items-center justify-between gap-4 p-5">
         <SectionHeader
           eyebrow="Dashboard"
@@ -34,9 +46,22 @@ export async function DashboardShell() {
           <CleanButton asChild>
             <Link href="/interview">Start Interview</Link>
           </CleanButton>
+          <CleanButton asChild variant="outline">
+            <Link href="/pricing">Upgrade</Link>
+          </CleanButton>
           <LogoutButton />
         </div>
       </header>
+
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        Plan: <span className="font-semibold capitalize">{profile?.subscriptionTier ?? session?.user?.subscriptionTier ?? "free"}</span> |{" "}
+        Interviews remaining this month:{" "}
+        <span className="font-semibold">
+          {(profile?.subscriptionTier ?? session?.user?.subscriptionTier ?? "free") === "pro"
+            ? "Unlimited"
+            : (profile?.interviewsRemaining ?? session?.user?.interviewsRemaining ?? 0)}
+        </span>
+      </section>
 
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
         <SectionHeader

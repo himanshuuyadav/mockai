@@ -7,10 +7,14 @@ const userSchema = new Schema(
     image: { type: String, default: "" },
     subscriptionTier: {
       type: String,
-      enum: ["free", "pro", "enterprise"],
+      enum: ["free", "pro"],
       default: "free",
       index: true,
     },
+    stripeCustomerId: { type: String, default: "", index: true },
+    stripeSubscriptionId: { type: String, default: "", index: true },
+    subscriptionStatus: { type: String, default: "inactive", index: true },
+    interviewsRemaining: { type: Number, default: 5 },
   },
   { timestamps: true },
 );

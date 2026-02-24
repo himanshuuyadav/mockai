@@ -25,7 +25,6 @@ export default async function InterviewPage() {
 
       <StartInterviewForm
         canStart={Boolean(latestResume)}
-        userTier={session.user.subscriptionTier ?? "free"}
       />
     </PageContainer>
   );

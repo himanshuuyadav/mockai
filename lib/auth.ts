@@ -6,7 +6,9 @@ import { getRequiredEnv } from "@/lib/env";
 import { findUserIdByEmail, findUserProfileById, syncOAuthUser } from "@/services/user.service";
 
 type AuthToken = JWT & {
-  subscriptionTier?: "free" | "pro" | "enterprise";
+  subscriptionTier?: "free" | "pro";
+  subscriptionStatus?: string;
+  interviewsRemaining?: number;
 };
 
 export const authOptions: NextAuthOptions = {
@@ -48,6 +50,8 @@ export const authOptions: NextAuthOptions = {
         const profile = await findUserProfileById(userId);
         if (profile) {
           (token as AuthToken).subscriptionTier = profile.subscriptionTier;
+          (token as AuthToken).subscriptionStatus = profile.subscriptionStatus;
+          (token as AuthToken).interviewsRemaining = profile.interviewsRemaining;
         }
       }
       return token;
@@ -56,6 +60,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.sub) {
         session.user.id = token.sub;
         session.user.subscriptionTier = (token as AuthToken).subscriptionTier;
+        session.user.subscriptionStatus = (token as AuthToken).subscriptionStatus;
+        session.user.interviewsRemaining = (token as AuthToken).interviewsRemaining;
       }
       return session;
     },

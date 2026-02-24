@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { createInterviewSession } from "@/services/interview.service";
 import { getLatestResumeRecordByUserId } from "@/services/resume.service";
+import { assertInterviewAccess, syncMonthlyInterviewAllowance } from "@/services/user.service";
 
 const createInterviewSessionSchema = z.object({
   type: z.enum(["technical", "hr"]),
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     }
 
     const payload = createInterviewSessionSchema.parse(await request.json());
+    const allowance = await assertInterviewAccess(session.user.id);
     const latestResume = await getLatestResumeRecordByUserId(session.user.id);
 
     if (!latestResume) {
@@ -34,8 +36,9 @@ export async function POST(request: Request) {
       type: payload.type,
       jdInfo: payload.jdInfo?.trim() || "",
       structuredResume: latestResume.structuredData,
-      subscriptionTier: session.user.subscriptionTier ?? "free",
+      subscriptionTier: allowance.subscriptionTier,
     });
+    await syncMonthlyInterviewAllowance(session.user.id);
 
     return NextResponse.json(createdSession);
   } catch (error) {

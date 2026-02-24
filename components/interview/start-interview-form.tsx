@@ -1,33 +1,27 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
-import { LiveInterviewSession } from "@/components/interview/live-interview-session";
 import { Button } from "@/components/ui/button";
 
 type InterviewType = "technical" | "hr";
 
 type CreateSessionResponse = {
   id: string;
-  type: InterviewType;
-  questions: string[];
-  subscriptionTier: "free" | "pro" | "enterprise";
-  createdAt: string;
 };
 
 export function StartInterviewForm({
   canStart,
-  userTier,
 }: {
   canStart: boolean;
-  userTier: "free" | "pro" | "enterprise";
 }) {
+  const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [type, setType] = useState<InterviewType>("technical");
   const [jdInfo, setJdInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionData, setSessionData] = useState<CreateSessionResponse | null>(null);
 
   async function handleStartSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,8 +43,8 @@ export function StartInterviewForm({
         throw new Error(payload.error || "Unable to start interview.");
       }
 
-      setSessionData(payload);
       setShowForm(false);
+      router.push(`/interview/session/${payload.id}`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unexpected error.");
     } finally {
@@ -117,22 +111,6 @@ export function StartInterviewForm({
             {loading ? "Starting..." : "Start Session"}
           </Button>
         </form>
-      ) : null}
-
-      {sessionData ? (
-        <div className="space-y-4">
-          <article className="rounded-md border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">
-              Session #{sessionData.id.slice(-6)} - {sessionData.type === "technical" ? "Technical" : "HR"}
-            </p>
-            <p className="mt-2 font-medium text-slate-900">{sessionData.questions[0]}</p>
-          </article>
-          <LiveInterviewSession
-            initialQuestion={sessionData.questions[0]}
-            isFreeUser={(sessionData.subscriptionTier || userTier) === "free"}
-            sessionId={sessionData.id}
-          />
-        </div>
       ) : null}
     </section>
   );

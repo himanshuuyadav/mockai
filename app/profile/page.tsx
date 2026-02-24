@@ -1,16 +1,20 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
+import { CancelSubscriptionButton } from "@/components/billing/cancel-subscription-button";
+import { UpgradeButton } from "@/components/billing/upgrade-button";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageContainer } from "@/components/ui/page-container";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SectionLayout } from "@/components/ui/section-layout";
 import { auth } from "@/lib/auth";
-import { findUserProfileById, getUserUsageStats } from "@/services/user.service";
+import { findUserProfileById, getUserUsageStats, syncMonthlyInterviewAllowance } from "@/services/user.service";
 
 export default async function ProfilePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
+  await syncMonthlyInterviewAllowance(session.user.id);
   const user = await findUserProfileById(session.user.id);
   const usage = await getUserUsageStats(session.user.id);
 
@@ -35,6 +39,9 @@ export default async function ProfilePage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Subscription</p>
             <p className="mt-1 text-sm capitalize text-indigo-600">{user?.subscriptionTier || "free"}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+              Status: <span className="capitalize text-slate-700">{user?.subscriptionStatus || "inactive"}</span>
+            </p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Member Since</p>
@@ -50,6 +57,41 @@ export default async function ProfilePage() {
           <MetricCard label="Avg Confidence" value={`${usage.avgConfidence}`} />
         </div>
       </section>
+
+      <SectionLayout>
+        <SectionHeader
+          eyebrow="Billing"
+          title="Subscription and billing controls"
+          description="Upgrade to unlock unlimited interviews and advanced AI analysis."
+        />
+        <article className="panel flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <p className="text-sm text-slate-700">
+              Current plan: <span className="font-semibold capitalize">{user?.subscriptionTier || "free"}</span>
+            </p>
+            <p className="mt-1 text-sm text-slate-700">
+              Interviews remaining this month:{" "}
+              <span className="font-semibold">{user?.subscriptionTier === "pro" ? "Unlimited" : user?.interviewsRemaining ?? 0}</span>
+            </p>
+            {user?.stripeCustomerId ? (
+              <p className="mt-1 text-xs text-slate-500">Billing customer ID: {user.stripeCustomerId}</p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {user?.subscriptionTier === "pro" ? (
+              <CancelSubscriptionButton disabled={user.subscriptionStatus === "canceled"} />
+            ) : (
+              <>
+                <UpgradeButton />
+                <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" href="/pricing">
+                  View Pricing
+                </Link>
+              </>
+            )}
+          </div>
+        </article>
+      </SectionLayout>
 
       <SectionLayout>
         <SectionHeader eyebrow="History" title="Recent interview activity" />

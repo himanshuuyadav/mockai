@@ -1,4 +1,5 @@
 import { connectToDatabase } from "@/lib/db";
+import type { SubscriptionTier } from "@/lib/subscription";
 import { Resume } from "@/models/Resume";
 import { structureResumeData } from "@/services/ai.service";
 import { uploadResumeFileToCloudinary } from "@/services/cloudinary.service";
@@ -7,9 +8,25 @@ import { parseResumeFile, validateResumeFile } from "@/services/resume-parser.se
 type ProcessResumeUploadInput = {
   userId: string;
   file: File;
+  subscriptionTier: SubscriptionTier;
 };
 
-export async function processResumeUpload({ userId, file }: ProcessResumeUploadInput) {
+function toBasicStructuredResume(data: Awaited<ReturnType<typeof structureResumeData>>) {
+  return {
+    skills: data.skills.slice(0, 20),
+    achievements: [],
+    projects: data.projects.map((project) => ({
+      name: project.name,
+      tech: project.tech.slice(0, 8),
+      description: "",
+    })),
+    experience: data.experience,
+    extracurricularExperience: [],
+    education: data.education,
+  };
+}
+
+export async function processResumeUpload({ userId, file, subscriptionTier }: ProcessResumeUploadInput) {
   validateResumeFile(file);
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
@@ -20,7 +37,9 @@ export async function processResumeUpload({ userId, file }: ProcessResumeUploadI
   });
 
   const extractedText = await parseResumeFile(file);
-  const structuredData = await structureResumeData(extractedText);
+  const advancedStructuredData = await structureResumeData(extractedText);
+  const structuredData =
+    subscriptionTier === "pro" ? advancedStructuredData : toBasicStructuredResume(advancedStructuredData);
 
   await connectToDatabase();
   const resume = await Resume.create({

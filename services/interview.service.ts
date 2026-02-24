@@ -22,7 +22,7 @@ type CreateInterviewSessionInput = {
   type: InterviewType;
   jdInfo?: string;
   structuredResume: StructuredResumeData;
-  subscriptionTier?: "free" | "pro" | "enterprise";
+  subscriptionTier?: "free" | "pro";
 };
 
 type SubmitInterviewAnswerInput = {
@@ -62,7 +62,7 @@ export async function createInterviewSession(input: CreateInterviewSessionInput)
     type: session.type as InterviewType,
     jdInfo: session.jdInfo as string,
     questions: session.questions as string[],
-    subscriptionTier: session.subscriptionTier as "free" | "pro" | "enterprise",
+    subscriptionTier: session.subscriptionTier as "free" | "pro",
     createdAt: session.createdAt as Date,
   };
 }
@@ -269,6 +269,25 @@ export async function getInterviewReportBySessionId(input: { sessionId: string; 
       endReason: string;
       createdAt: Date;
       endedAt: Date | null;
+    } | null>();
+
+  return session;
+}
+
+export async function getInterviewSessionRuntime(input: { sessionId: string; userId: string }) {
+  await connectToDatabase();
+
+  const session = await InterviewSession.findOne({
+    _id: input.sessionId,
+    userId: new mongoose.Types.ObjectId(input.userId),
+  })
+    .select("type questions subscriptionTier status createdAt")
+    .lean<{
+      type: InterviewType;
+      questions: string[];
+      subscriptionTier: "free" | "pro";
+      status: "active" | "ended";
+      createdAt: Date;
     } | null>();
 
   return session;
