@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { parseApiResponse } from "@/lib/api-client";
 
 type SubmitAnswerResponse = {
   score: number;
@@ -400,11 +401,7 @@ export function LiveInterviewSession({
           method: "POST",
           body: formData,
         });
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to end interview.");
-        }
+        await parseApiResponse<Record<string, unknown>>(response);
 
         router.push(`/report?sessionId=${sessionId}`);
       } catch (endError) {
@@ -534,14 +531,7 @@ export function LiveInterviewSession({
         body: formData,
       });
 
-      const payload = (await response.json()) as SubmitAnswerResponse;
-      if (!response.ok) {
-        if ((payload.error || "").toLowerCase().includes("time limit")) {
-          await endInterviewAndRedirect("auto_time_limit");
-          return;
-        }
-        throw new Error(payload.error || "Failed to generate follow-up question.");
-      }
+      const payload = await parseApiResponse<SubmitAnswerResponse>(response);
 
       setLastScore(payload.score);
       setLastFeedback(payload.feedback);
@@ -553,7 +543,12 @@ export function LiveInterviewSession({
       setElapsedRecordingSeconds(0);
       chunksRef.current = [];
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to submit answer.");
+      const message = submitError instanceof Error ? submitError.message : "Unable to submit answer.";
+      if (message.toLowerCase().includes("time limit")) {
+        await endInterviewAndRedirect("auto_time_limit");
+        return;
+      }
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

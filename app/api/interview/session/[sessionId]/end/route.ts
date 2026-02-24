@@ -1,24 +1,17 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { auth } from "@/lib/auth";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
+import { validateInterviewVideoFile } from "@/lib/file-security";
+import { endInterviewSchema, sessionIdParamSchema } from "@/lib/schemas/api";
 import { endInterviewSession } from "@/services/interview.service";
 
-const endInterviewSchema = z.object({
-  reason: z.enum(["manual", "auto_time_limit"]).default("manual"),
-});
+export const dynamic = "force-dynamic";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { sessionId: string } },
-) {
-  try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+export const POST = withErrorHandler(
+  async (
+    request: Request,
+    { params }: { params: { sessionId: string } },
+  ) => {
+    const user = await requireSessionUser();
+    const parsedParams = sessionIdParamSchema.parse(params);
     const contentType = request.headers.get("content-type") || "";
 
     let reason: "manual" | "auto_time_limit" = "manual";
@@ -28,7 +21,7 @@ export async function POST(
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       const payload = endInterviewSchema.parse({
-        reason: formData.get("reason"),
+        reason: formData.get("reason") ?? undefined,
       });
       reason = payload.reason;
 
@@ -39,6 +32,7 @@ export async function POST(
 
       const videoValue = formData.get("video");
       if (videoValue instanceof File) {
+        validateInterviewVideoFile(videoValue);
         videoFile = videoValue;
       }
     } else {
@@ -47,17 +41,15 @@ export async function POST(
       reason = payload.reason;
     }
 
-    const ended = await endInterviewSession({
-      sessionId: params.sessionId,
-      userId: session.user.id,
+    return endInterviewSession({
+      sessionId: parsedParams.sessionId,
+      userId: user.id,
       reason,
       transcript,
       videoFile,
     });
-
-    return NextResponse.json(ended);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to end interview session.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+  },
+  {
+    route: "api.interview.end",
+  },
+);

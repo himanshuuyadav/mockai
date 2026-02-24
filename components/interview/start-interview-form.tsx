@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { parseApiResponse } from "@/lib/api-client";
 
 type InterviewType = "technical" | "hr";
 
@@ -38,10 +39,7 @@ export function StartInterviewForm({
         }),
       });
 
-      const payload = (await response.json()) as CreateSessionResponse & { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to start interview.");
-      }
+      const payload = await parseApiResponse<CreateSessionResponse>(response);
 
       setShowForm(false);
       router.push(`/interview/session/${payload.id}`);

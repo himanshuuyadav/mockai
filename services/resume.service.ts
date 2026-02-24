@@ -1,5 +1,9 @@
+import { createHash } from "crypto";
+
 import { connectToDatabase } from "@/lib/db";
+import { AppError } from "@/lib/errors";
 import type { SubscriptionTier } from "@/lib/subscription";
+import { logger } from "@/lib/logger";
 import { Resume } from "@/models/Resume";
 import { structureResumeData } from "@/services/ai.service";
 import { uploadResumeFileToCloudinary } from "@/services/cloudinary.service";
@@ -10,6 +14,8 @@ type ProcessResumeUploadInput = {
   file: File;
   subscriptionTier: SubscriptionTier;
 };
+
+const resumeStructuringCache = new Map<string, Awaited<ReturnType<typeof structureResumeData>>>();
 
 function toBasicStructuredResume(data: Awaited<ReturnType<typeof structureResumeData>>) {
   return {
@@ -27,29 +33,90 @@ function toBasicStructuredResume(data: Awaited<ReturnType<typeof structureResume
 }
 
 export async function processResumeUpload({ userId, file, subscriptionTier }: ProcessResumeUploadInput) {
-  validateResumeFile(file);
+  try {
+    validateResumeFile(file);
+  } catch (error) {
+    throw new AppError(error instanceof Error ? error.message : "Invalid resume file.", { statusCode: 400 });
+  }
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const uploadResult = await uploadResumeFileToCloudinary({
-    fileBuffer,
-    fileName: file.name,
-    userId,
-  });
 
-  const extractedText = await parseResumeFile(file);
-  const advancedStructuredData = await structureResumeData(extractedText);
+  let uploadResult: { secureUrl: string };
+  try {
+    uploadResult = await uploadResumeFileToCloudinary({
+      fileBuffer,
+      fileName: file.name,
+      userId,
+    });
+  } catch (error) {
+    throw new AppError("Unable to upload resume file. Please try again.", { statusCode: 502 });
+  }
+
+  let extractedText = "";
+  try {
+    extractedText = await parseResumeFile(file);
+  } catch (error) {
+    logger.error("resume_parse_failed", {
+      userId,
+      fileName: file.name,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to parse resume text from this file.", { statusCode: 400 });
+  }
+
+  const hash = createHash("sha256").update(extractedText).digest("hex");
+  const cacheKey = `${userId}:${hash}`;
+
+  let advancedStructuredData = resumeStructuringCache.get(cacheKey);
+
+  if (!advancedStructuredData) {
+    await connectToDatabase();
+    const existingResume = await Resume.findOne({
+      userId,
+      extractedText,
+    })
+      .sort({ createdAt: -1 })
+      .select("structuredData")
+      .lean<{ structuredData: Awaited<ReturnType<typeof structureResumeData>> } | null>();
+
+    if (existingResume?.structuredData) {
+      advancedStructuredData = existingResume.structuredData;
+    }
+  }
+
+  if (!advancedStructuredData) {
+    try {
+      advancedStructuredData = await structureResumeData(extractedText);
+      resumeStructuringCache.set(cacheKey, advancedStructuredData);
+    } catch (error) {
+      logger.error("resume_structuring_failed", {
+        userId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      throw new AppError("Unable to structure resume details right now.", { statusCode: 503 });
+    }
+  }
+
   const structuredData =
     subscriptionTier === "pro" ? advancedStructuredData : toBasicStructuredResume(advancedStructuredData);
 
-  await connectToDatabase();
-  const resume = await Resume.create({
-    userId,
-    originalFileUrl: uploadResult.secureUrl,
-    extractedText,
-    structuredData,
-  });
+  try {
+    await connectToDatabase();
+    const resume = await Resume.create({
+      userId,
+      originalFileUrl: uploadResult.secureUrl,
+      extractedText,
+      structuredData,
+    });
 
-  return resume;
+    return resume;
+  } catch (error) {
+    logger.error("resume_db_save_failed", {
+      userId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to save resume record.", { statusCode: 500 });
+  }
 }
 
 export async function getLatestResumeByUserId(userId: string) {

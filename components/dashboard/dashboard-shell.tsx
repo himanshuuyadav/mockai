@@ -1,8 +1,8 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BillingStatusBanner } from "@/components/dashboard/billing-status-banner";
-import { PerformanceTrendChart } from "@/components/dashboard/performance-trend-chart";
 import { CleanButton } from "@/components/ui/clean-button";
 import { DashboardGrid } from "@/components/ui/dashboard-grid";
 import { DataPanel } from "@/components/ui/data-panel";
@@ -13,6 +13,10 @@ import { SectionLayout } from "@/components/ui/section-layout";
 import { auth } from "@/lib/auth";
 import { getDashboardData } from "@/services/dashboard.service";
 import { findUserProfileById, syncMonthlyInterviewAllowance } from "@/services/user.service";
+
+const PerformanceTrendChart = dynamic(
+  () => import("@/components/dashboard/performance-trend-chart").then((mod) => mod.PerformanceTrendChart),
+);
 
 export async function DashboardShell({
   billingStatus,
@@ -26,6 +30,10 @@ export async function DashboardShell({
   const data = session?.user?.id ? await getDashboardData(session.user.id) : null;
   const profile = session?.user?.id ? await findUserProfileById(session.user.id) : null;
   const usagePercent = Math.min(100, Math.round(((data?.endedSessions ?? 0) / Math.max(1, data?.totalSessions ?? 1)) * 100));
+  const recentSessions = data?.recent ?? [];
+  const technicalRounds = recentSessions.filter((x) => x.type === "technical").length;
+  const hrRounds = recentSessions.filter((x) => x.type === "hr").length;
+  const completedRounds = recentSessions.filter((x) => x.status === "ended").length;
 
   return (
     <PageContainer className="space-y-8 pt-10">
@@ -115,8 +123,8 @@ export async function DashboardShell({
         <div className="space-y-3">
         <SectionHeader eyebrow="Activity" title="Recent Interviews" />
         <div className="space-y-3">
-          {(data?.recent ?? []).length ? (
-            data?.recent.map((item) => (
+          {recentSessions.length ? (
+            recentSessions.map((item) => (
               <article className="panel flex flex-wrap items-center justify-between gap-3 p-4" key={item.id}>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
@@ -139,9 +147,9 @@ export async function DashboardShell({
         <DataPanel subtitle="Operational overview for current usage window." title="Data Summary">
           <div className="space-y-3">
             {[
-              { label: "Technical rounds", value: `${(data?.recent ?? []).filter((x) => x.type === "technical").length}` },
-              { label: "HR rounds", value: `${(data?.recent ?? []).filter((x) => x.type === "hr").length}` },
-              { label: "Completed this period", value: `${(data?.recent ?? []).filter((x) => x.status === "ended").length}` },
+              { label: "Technical rounds", value: `${technicalRounds}` },
+              { label: "HR rounds", value: `${hrRounds}` },
+              { label: "Completed this period", value: `${completedRounds}` },
             ].map((item) => (
               <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2" key={item.label}>
                 <span className="text-xs text-slate-600">{item.label}</span>

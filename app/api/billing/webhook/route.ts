@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-
+import { AppError } from "@/lib/errors";
+import { withErrorHandler } from "@/lib/api-handler";
+import { logger } from "@/lib/logger";
 import {
   parseStripeWebhookEvent,
   verifyStripeWebhookSignature,
@@ -10,11 +11,13 @@ import {
   updateSubscriptionByCustomerId,
 } from "@/services/user.service";
 
-export async function POST(request: Request) {
-  try {
+export const dynamic = "force-dynamic";
+
+export const POST = withErrorHandler(
+  async (request: Request) => {
     const signature = request.headers.get("stripe-signature");
     if (!signature) {
-      return NextResponse.json({ error: "Missing Stripe signature." }, { status: 400 });
+      throw new AppError("Missing Stripe signature.", { statusCode: 400 });
     }
 
     const rawBody = await request.text();
@@ -24,6 +27,7 @@ export async function POST(request: Request) {
     });
 
     const event = parseStripeWebhookEvent(rawBody);
+    logger.info("stripe_webhook_received", { eventType: event.type });
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -81,12 +85,13 @@ export async function POST(request: Request) {
       }
 
       default:
+        logger.info("stripe_webhook_ignored", { eventType: event.type });
         break;
     }
 
-    return NextResponse.json({ received: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Webhook processing failed.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    return { received: true };
+  },
+  {
+    route: "api.billing.webhook",
+  },
+);

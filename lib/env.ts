@@ -1,36 +1,22 @@
-const requiredServerEnv = [
-  "MONGODB_URI",
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
-  "NEXTAUTH_SECRET",
-  "NEXTAUTH_URL",
-  "GEMINI_API_KEY",
-  "CLOUDINARY_CLOUD_NAME",
-  "CLOUDINARY_API_KEY",
-  "CLOUDINARY_API_SECRET",
-  "STRIPE_SECRET_KEY",
-  "STRIPE_PRO_PRICE_ID",
-  "STRIPE_WEBHOOK_SECRET",
-] as const;
+import "server-only";
 
-type RequiredServerEnvKey = (typeof requiredServerEnv)[number];
+import {
+  getOptionalServerEnv,
+  getRequiredServerEnv,
+  validateConfigOnStartup,
+  type ServerEnvKey,
+} from "@/lib/config";
+
+export type RequiredServerEnvKey = ServerEnvKey;
 
 export function getRequiredEnv(key: RequiredServerEnvKey): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
+  return getRequiredServerEnv(key);
 }
 
 export function getEnv(key: string): string | undefined {
-  return process.env[key];
+  return getOptionalServerEnv(key);
 }
 
 export function validateServerEnv(): void {
-  requiredServerEnv.forEach((key) => {
-    if (!process.env[key]) {
-      throw new Error(`Missing required environment variable: ${key}`);
-    }
-  });
+  validateConfigOnStartup();
 }

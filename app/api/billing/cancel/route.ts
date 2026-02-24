@@ -1,19 +1,18 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { AppError } from "@/lib/errors";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
+import { RateLimitRules } from "@/lib/rate-limit";
 import { setSubscriptionCancelAtPeriodEnd } from "@/services/stripe.service";
 import { getBillingSnapshotByUserId, updateSubscriptionByCustomerId } from "@/services/user.service";
 
-export async function POST() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const dynamic = "force-dynamic";
 
-    const billing = await getBillingSnapshotByUserId(session.user.id);
+export const POST = withErrorHandler(
+  async () => {
+    const user = await requireSessionUser();
+
+    const billing = await getBillingSnapshotByUserId(user.id);
     if (!billing?.stripeSubscriptionId || !billing.stripeCustomerId) {
-      return NextResponse.json({ error: "No active Stripe subscription found." }, { status: 400 });
+      throw new AppError("No active Stripe subscription found.", { statusCode: 400 });
     }
 
     const subscription = await setSubscriptionCancelAtPeriodEnd({
@@ -26,12 +25,13 @@ export async function POST() {
       subscriptionStatus: subscription.status,
     });
 
-    return NextResponse.json({
+    return {
       message: "Subscription cancellation scheduled at period end.",
       status: subscription.status,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to cancel subscription.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    };
+  },
+  {
+    route: "api.billing.cancel",
+    rateLimit: RateLimitRules.billingOps,
+  },
+);

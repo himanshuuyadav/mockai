@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { parseApiResponse } from "@/lib/api-client";
 
 const ACCEPTED_TYPES = ".pdf,.docx";
 
@@ -39,11 +40,7 @@ export function ResumeUploadForm() {
         body: formData,
       });
 
-      const payload = (await response.json()) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Upload failed.");
-      }
+      await parseApiResponse<Record<string, unknown>>(response);
 
       router.refresh();
       setFile(null);

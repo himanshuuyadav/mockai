@@ -1,7 +1,7 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
-import { ReportCharts } from "@/components/report/report-charts";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageContainer } from "@/components/ui/page-container";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -10,16 +10,20 @@ import { TimelineItem } from "@/components/ui/timeline-item";
 import { auth } from "@/lib/auth";
 import { getInterviewReportBySessionId } from "@/services/interview.service";
 
+const ReportCharts = dynamic(
+  () => import("@/components/report/report-charts").then((mod) => mod.ReportCharts),
+);
+
 const FILLER_WORDS = ["um", "uh", "like", "you know", "basically", "actually", "literally", "kind of", "sort of"];
 
 function highlightFillerWords(text: string) {
   if (!text) {
     return [];
   }
-  const pattern = new RegExp(`\\b(${FILLER_WORDS.map((word) => word.replace(" ", "\\s+")).join("|")})\\b`, "gi");
+  const pattern = new RegExp(`\\b(${FILLER_WORDS.map((word) => word.replace(" ", "\\\\s+")).join("|")})\\b`, "gi");
   const parts = text.split(pattern);
   return parts.map((part, index) => {
-    const isFiller = FILLER_WORDS.some((word) => new RegExp(`^${word.replace(" ", "\\s+")}$`, "i").test(part));
+    const isFiller = FILLER_WORDS.some((word) => new RegExp(`^${word.replace(" ", "\\\\s+")}$`, "i").test(part));
     return isFiller ? (
       <mark className="rounded bg-amber-100 px-1 text-amber-900" key={`${part}-${index}`}>
         {part}

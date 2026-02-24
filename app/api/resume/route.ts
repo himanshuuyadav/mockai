@@ -1,40 +1,40 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
+import { AppError } from "@/lib/errors";
+import { validateResumeUploadFile } from "@/lib/file-security";
+import { RateLimitRules } from "@/lib/rate-limit";
 import { processResumeUpload } from "@/services/resume.service";
 import { getBillingSnapshotByUserId } from "@/services/user.service";
 
-export async function POST(request: Request) {
-  try {
-    const session = await auth();
+export const dynamic = "force-dynamic";
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+export const POST = withErrorHandler(
+  async (request: Request) => {
+    const user = await requireSessionUser();
     const formData = await request.formData();
     const fileValue = formData.get("file");
-    const billing = await getBillingSnapshotByUserId(session.user.id);
+    const billing = await getBillingSnapshotByUserId(user.id);
 
     if (!(fileValue instanceof File)) {
-      return NextResponse.json({ error: "Resume file is required." }, { status: 400 });
+      throw new AppError("Resume file is required.", { statusCode: 400 });
     }
+    validateResumeUploadFile(fileValue);
 
     const resume = await processResumeUpload({
-      userId: session.user.id,
+      userId: user.id,
       file: fileValue,
       subscriptionTier: billing?.subscriptionTier ?? "free",
     });
 
-    return NextResponse.json({
+    return {
       id: resume._id.toString(),
       originalFileUrl: resume.originalFileUrl,
       structuredData: resume.structuredData,
       createdAt: resume.createdAt,
       deepAnalysisEnabled: (billing?.subscriptionTier ?? "free") === "pro",
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected error while processing resume.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    };
+  },
+  {
+    route: "api.resume.upload",
+    rateLimit: RateLimitRules.resumeUpload,
+  },
+);

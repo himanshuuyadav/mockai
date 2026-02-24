@@ -1,37 +1,44 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
+import { AppError } from "@/lib/errors";
+import { validateInterviewVideoFile } from "@/lib/file-security";
+import { RateLimitRules } from "@/lib/rate-limit";
+import { sessionIdParamSchema, submitInterviewAnswerSchema } from "@/lib/schemas/api";
 import { submitInterviewAnswerAndGenerateFollowUp } from "@/services/interview.service";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { sessionId: string } },
-) {
-  try {
-    const session = await auth();
+export const dynamic = "force-dynamic";
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+export const POST = withErrorHandler(
+  async (
+    request: Request,
+    { params }: { params: { sessionId: string } },
+  ) => {
+    const user = await requireSessionUser();
+    const parsedParams = sessionIdParamSchema.parse(params);
     const formData = await request.formData();
-    const transcriptValue = formData.get("transcript");
+    const transcriptValue = submitInterviewAnswerSchema.parse({
+      transcript: formData.get("transcript"),
+    });
     const videoValue = formData.get("video");
 
-    if (typeof transcriptValue !== "string" || !transcriptValue.trim()) {
-      return NextResponse.json({ error: "Transcript is required." }, { status: 400 });
+    if (videoValue instanceof File) {
+      validateInterviewVideoFile(videoValue);
     }
 
     const result = await submitInterviewAnswerAndGenerateFollowUp({
-      sessionId: params.sessionId,
-      userId: session.user.id,
-      transcript: transcriptValue.trim(),
+      sessionId: parsedParams.sessionId,
+      userId: user.id,
+      transcript: transcriptValue.transcript,
       videoFile: videoValue instanceof File ? videoValue : undefined,
     });
 
-    return NextResponse.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to process interview answer.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    if (!result.followUpQuestion) {
+      throw new AppError("Unable to process interview answer.", { statusCode: 500 });
+    }
+
+    return result;
+  },
+  {
+    route: "api.interview.answer",
+    rateLimit: RateLimitRules.aiCalls,
+  },
+);

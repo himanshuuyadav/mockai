@@ -1,34 +1,36 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { AppError } from "@/lib/errors";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
 import { getRequiredEnv } from "@/lib/env";
+import { RateLimitRules } from "@/lib/rate-limit";
 import { createOrReuseStripeCustomer, createStripeCheckoutSession } from "@/services/stripe.service";
 import { findUserProfileById, upsertStripeCustomerForUser } from "@/services/user.service";
 
-export async function POST() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id || !session.user.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const dynamic = "force-dynamic";
+
+export const POST = withErrorHandler(
+  async () => {
+    const user = await requireSessionUser();
+    if (!user.email) {
+      throw new AppError("Unauthorized", { statusCode: 401 });
     }
 
-    const profile = await findUserProfileById(session.user.id);
+    const profile = await findUserProfileById(user.id);
     if (!profile) {
-      return NextResponse.json({ error: "User not found." }, { status: 404 });
+      throw new AppError("User not found.", { statusCode: 404 });
     }
     if (profile.subscriptionTier === "pro" && profile.subscriptionStatus !== "canceled") {
-      return NextResponse.json({ error: "User already has an active Pro subscription." }, { status: 400 });
+      throw new AppError("User already has an active Pro subscription.", { statusCode: 400 });
     }
 
     const customerId = await createOrReuseStripeCustomer({
       stripeCustomerId: profile.stripeCustomerId,
-      email: session.user.email,
+      email: user.email,
       name: profile.name,
     });
 
     if (!profile.stripeCustomerId) {
       await upsertStripeCustomerForUser({
-        userId: session.user.id,
+        userId: user.id,
         stripeCustomerId: customerId,
       });
     }
@@ -36,14 +38,15 @@ export async function POST() {
     const origin = getRequiredEnv("NEXTAUTH_URL");
     const checkout = await createStripeCheckoutSession({
       customerId,
-      userId: session.user.id,
+      userId: user.id,
       successUrl: `${origin}/dashboard?billing=success`,
-      cancelUrl: `${origin}/pricing?billing=cancelled`,
+      cancelUrl: `${origin}/dashboard?billing=cancelled`,
     });
 
-    return NextResponse.json({ checkoutUrl: checkout.url });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to start checkout.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    return { checkoutUrl: checkout.url };
+  },
+  {
+    route: "api.billing.checkout",
+    rateLimit: RateLimitRules.billingOps,
+  },
+);

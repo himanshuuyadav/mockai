@@ -1,6 +1,8 @@
 import { z } from "zod";
 
+import { AppError } from "@/lib/errors";
 import { getGeminiClient, getGeminiResponseText } from "@/lib/gemini";
+import { logger, withLatencyLog } from "@/lib/logger";
 
 const resumeStructuredSchema = z.object({
   skills: z.array(z.string()).default([]),
@@ -159,15 +161,24 @@ export async function generateInterviewQuestions(input: {
     input.resumeSummary,
   ].join("\n");
 
-  const response = await getGeminiClient().models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+  try {
+    const response = await withLatencyLog("ai.generateInterviewQuestions", () =>
+      getGeminiClient().models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      }),
+    );
 
-  return getGeminiResponseText(response)
-    .split("\n")
-    .map((line) => line.replace(/^\d+[\).\s-]*/, "").trim())
-    .filter(Boolean);
+    return getGeminiResponseText(response)
+      .split("\n")
+      .map((line) => line.replace(/^\d+[\).\s-]*/, "").trim())
+      .filter(Boolean);
+  } catch (error) {
+    logger.error("ai_generate_questions_failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to generate interview questions right now.", { statusCode: 503 });
+  }
 }
 
 export async function evaluateInterviewAnswers(input: {
@@ -179,12 +190,21 @@ export async function evaluateInterviewAnswers(input: {
     .map((q, i) => `Q${i + 1}: ${q}\nA${i + 1}: ${input.answers[i] ?? ""}`)
     .join("\n\n");
 
-  const response = await getGeminiClient().models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: `You are an interview evaluator for ${input.role}. Score from 0-100 and give concise feedback.\n\n${joined}`,
-  });
+  try {
+    const response = await withLatencyLog("ai.evaluateInterviewAnswers", () =>
+      getGeminiClient().models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `You are an interview evaluator for ${input.role}. Score from 0-100 and give concise feedback.\n\n${joined}`,
+      }),
+    );
 
-  return getGeminiResponseText(response);
+    return getGeminiResponseText(response);
+  } catch (error) {
+    logger.error("ai_evaluate_answers_failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to evaluate interview answers right now.", { statusCode: 503 });
+  }
 }
 
 export async function structureResumeData(extractedText: string): Promise<StructuredResumeData> {
@@ -206,22 +226,31 @@ export async function structureResumeData(extractedText: string): Promise<Struct
     extractedText,
   ].join("\n");
 
-  const response = await getGeminiClient().models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-    },
-  });
+  try {
+    const response = await withLatencyLog("ai.structureResumeData", () =>
+      getGeminiClient().models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        },
+      }),
+    );
 
-  const raw = getGeminiResponseText(response);
-  const jsonStartIndex = raw.indexOf("{");
-  const jsonEndIndex = raw.lastIndexOf("}");
+    const raw = getGeminiResponseText(response);
+    const jsonStartIndex = raw.indexOf("{");
+    const jsonEndIndex = raw.lastIndexOf("}");
 
-  if (jsonStartIndex === -1 || jsonEndIndex === -1) {
-    throw new Error("Gemini did not return valid JSON for resume structuring.");
+    if (jsonStartIndex === -1 || jsonEndIndex === -1) {
+      throw new Error("Gemini did not return valid JSON for resume structuring.");
+    }
+
+    const parsed = JSON.parse(raw.slice(jsonStartIndex, jsonEndIndex + 1)) as unknown;
+    return normalizeStructuredResumeData(parsed, extractedText);
+  } catch (error) {
+    logger.error("ai_structure_resume_failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to process resume analysis at the moment.", { statusCode: 503 });
   }
-
-  const parsed = JSON.parse(raw.slice(jsonStartIndex, jsonEndIndex + 1)) as unknown;
-  return normalizeStructuredResumeData(parsed, extractedText);
 }

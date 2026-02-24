@@ -3,8 +3,10 @@ import { Manrope } from "next/font/google";
 
 import "@/app/globals.css";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { validateServerEnv } from "@/lib/env";
 
 const manrope = Manrope({ subsets: ["latin"] });
+validateServerEnv();
 
 export const metadata: Metadata = {
   title: "MockAI",

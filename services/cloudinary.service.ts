@@ -2,6 +2,8 @@ import { Readable } from "stream";
 
 import { cloudinary } from "@/lib/cloudinary";
 import { getRequiredEnv } from "@/lib/env";
+import { sanitizeFilename } from "@/lib/file-security";
+import { logger } from "@/lib/logger";
 
 type UploadResumeFileInput = {
   fileBuffer: Buffer;
@@ -29,28 +31,39 @@ export async function uploadResumeFileToCloudinary({
 }: UploadResumeFileInput) {
   ensureCloudinaryConfig();
 
-  return new Promise<{ secureUrl: string }>((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: `mockai/resumes/${userId}`,
-        resource_type: "raw",
-        type: "upload",
-        access_mode: "public",
-        public_id: `${Date.now()}-${fileName.replace(/\s+/g, "-")}`,
-        use_filename: true,
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(error ?? new Error("Cloudinary upload failed"));
-          return;
-        }
+  const safeFileName = sanitizeFilename(fileName);
 
-        resolve({ secureUrl: result.secure_url });
-      },
-    );
+  try {
+    return await new Promise<{ secureUrl: string }>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `mockai/resumes/${userId}`,
+          resource_type: "raw",
+          type: "upload",
+          access_mode: "public",
+          public_id: `${Date.now()}-${safeFileName}`,
+          use_filename: true,
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error ?? new Error("Cloudinary upload failed"));
+            return;
+          }
 
-    Readable.from(fileBuffer).pipe(uploadStream);
-  });
+          resolve({ secureUrl: result.secure_url });
+        },
+      );
+
+      Readable.from(fileBuffer).pipe(uploadStream);
+    });
+  } catch (error) {
+    logger.error("cloudinary_resume_upload_failed", {
+      userId,
+      fileName: safeFileName,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
 }
 
 export async function uploadInterviewVideoToCloudinary({
@@ -61,25 +74,35 @@ export async function uploadInterviewVideoToCloudinary({
 }: UploadInterviewVideoInput) {
   ensureCloudinaryConfig();
 
-  return new Promise<{ secureUrl: string }>((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: `mockai/interviews/${userId}/${sessionId}`,
-        resource_type: "video",
-        public_id: `q-${questionIndex + 1}-${Date.now()}`,
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(error ?? new Error("Cloudinary video upload failed"));
-          return;
-        }
+  try {
+    return await new Promise<{ secureUrl: string }>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `mockai/interviews/${userId}/${sessionId}`,
+          resource_type: "video",
+          public_id: `q-${questionIndex + 1}-${Date.now()}`,
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error ?? new Error("Cloudinary video upload failed"));
+            return;
+          }
 
-        resolve({ secureUrl: result.secure_url });
-      },
-    );
+          resolve({ secureUrl: result.secure_url });
+        },
+      );
 
-    Readable.from(fileBuffer).pipe(uploadStream);
-  });
+      Readable.from(fileBuffer).pipe(uploadStream);
+    });
+  } catch (error) {
+    logger.error("cloudinary_video_upload_failed", {
+      userId,
+      sessionId,
+      questionIndex,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
 }
 
 function extractCloudinaryRawPublicId(originalFileUrl: string) {

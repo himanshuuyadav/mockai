@@ -1,31 +1,24 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { assertFound, requireSessionUser, withErrorHandler } from "@/lib/api-handler";
+import { sessionIdParamSchema } from "@/lib/schemas/api";
 import { getInterviewReportBySessionId } from "@/services/interview.service";
 
-export async function GET(
-  _: Request,
-  { params }: { params: { sessionId: string } },
-) {
-  try {
-    const session = await auth();
+export const dynamic = "force-dynamic";
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+export const GET = withErrorHandler(
+  async (
+    _: Request,
+    { params }: { params: { sessionId: string } },
+  ) => {
+    const user = await requireSessionUser();
+    const parsedParams = sessionIdParamSchema.parse(params);
     const report = await getInterviewReportBySessionId({
-      sessionId: params.sessionId,
-      userId: session.user.id,
+      sessionId: parsedParams.sessionId,
+      userId: user.id,
     });
 
-    if (!report) {
-      return NextResponse.json({ error: "Report not found." }, { status: 404 });
-    }
-
-    return NextResponse.json(report);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to fetch report.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    return assertFound(report, "Report not found.");
+  },
+  {
+    route: "api.interview.report",
+  },
+);

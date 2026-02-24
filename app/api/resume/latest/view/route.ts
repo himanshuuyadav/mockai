@@ -1,26 +1,22 @@
-import { NextResponse } from "next/server";
-
-import { auth } from "@/lib/auth";
+import { AppError } from "@/lib/errors";
+import { requireSessionUser, withErrorHandler } from "@/lib/api-handler";
 import { getLatestResumeByUserId } from "@/services/resume.service";
 import { getSignedResumeViewUrl } from "@/services/cloudinary.service";
 
-export async function GET() {
-  try {
-    const session = await auth();
+export const dynamic = "force-dynamic";
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const latestResume = await getLatestResumeByUserId(session.user.id);
+export const GET = withErrorHandler(
+  async () => {
+    const user = await requireSessionUser();
+    const latestResume = await getLatestResumeByUserId(user.id);
     if (!latestResume?.originalFileUrl) {
-      return NextResponse.json({ error: "No resume found." }, { status: 404 });
+      throw new AppError("No resume found.", { statusCode: 404 });
     }
 
     const signedUrl = getSignedResumeViewUrl(latestResume.originalFileUrl);
-    return NextResponse.redirect(signedUrl);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to generate resume view URL.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    return Response.redirect(signedUrl);
+  },
+  {
+    route: "api.resume.view",
+  },
+);

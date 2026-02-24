@@ -1,48 +1,39 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { auth } from "@/lib/auth";
+import { withErrorHandler, requireSessionUser } from "@/lib/api-handler";
+import { AppError } from "@/lib/errors";
+import { RateLimitRules } from "@/lib/rate-limit";
+import { createInterviewSessionBodySchema } from "@/lib/schemas/api";
 import { createInterviewSession } from "@/services/interview.service";
 import { getLatestResumeRecordByUserId } from "@/services/resume.service";
 import { assertInterviewAccess, syncMonthlyInterviewAllowance } from "@/services/user.service";
 
-const createInterviewSessionSchema = z.object({
-  type: z.enum(["technical", "hr"]),
-  jdInfo: z.string().max(3000).optional(),
-});
+export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  try {
-    const session = await auth();
+export const POST = withErrorHandler(
+  async (request: Request) => {
+    const user = await requireSessionUser();
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = createInterviewSessionSchema.parse(await request.json());
-    const allowance = await assertInterviewAccess(session.user.id);
-    const latestResume = await getLatestResumeRecordByUserId(session.user.id);
+    const payload = createInterviewSessionBodySchema.parse(await request.json());
+    const allowance = await assertInterviewAccess(user.id);
+    const latestResume = await getLatestResumeRecordByUserId(user.id);
 
     if (!latestResume) {
-      return NextResponse.json(
-        { error: "No resume found. Upload a resume before starting interview." },
-        { status: 400 },
-      );
+      throw new AppError("No resume found. Upload a resume before starting interview.", { statusCode: 400 });
     }
 
     const createdSession = await createInterviewSession({
-      userId: session.user.id,
+      userId: user.id,
       resumeId: latestResume._id.toString(),
       type: payload.type,
       jdInfo: payload.jdInfo?.trim() || "",
       structuredResume: latestResume.structuredData,
       subscriptionTier: allowance.subscriptionTier,
     });
-    await syncMonthlyInterviewAllowance(session.user.id);
+    await syncMonthlyInterviewAllowance(user.id);
 
-    return NextResponse.json(createdSession);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to create interview session.";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
+    return createdSession;
+  },
+  {
+    route: "api.interview.create",
+    rateLimit: RateLimitRules.interviewCreate,
+  },
+);

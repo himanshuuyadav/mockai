@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 import { getRequiredEnv } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
 
@@ -49,6 +50,11 @@ async function stripeRequest(path: string, init?: RequestInit) {
 
   const payload = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
+    logger.error("stripe_request_failed", {
+      path,
+      method: init?.method ?? "GET",
+      status: response.status,
+    });
     const message = typeof payload.error === "object" && payload.error && "message" in payload.error
       ? String((payload.error as { message?: string }).message ?? "Stripe API request failed.")
       : "Stripe API request failed.";
@@ -160,6 +166,7 @@ export function verifyStripeWebhookSignature(input: {
   const signaturePart = parts.find((part) => part.startsWith("v1="));
 
   if (!timestampPart || !signaturePart) {
+    logger.warn("stripe_signature_invalid_header");
     throw new Error("Invalid Stripe signature header.");
   }
 
@@ -171,6 +178,7 @@ export function verifyStripeWebhookSignature(input: {
   const expected = Buffer.from(expectedSignature, "hex");
   const provided = Buffer.from(providedSignature, "hex");
   if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
+    logger.warn("stripe_signature_mismatch");
     throw new Error("Stripe signature verification failed.");
   }
 }

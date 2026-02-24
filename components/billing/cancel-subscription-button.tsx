@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { parseApiResponse } from "@/lib/api-client";
 
 export function CancelSubscriptionButton({ disabled = false }: { disabled?: boolean }) {
   const router = useRouter();
@@ -18,10 +19,7 @@ export function CancelSubscriptionButton({ disabled = false }: { disabled?: bool
       const response = await fetch("/api/billing/cancel", {
         method: "POST",
       });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to cancel subscription.");
-      }
+      await parseApiResponse<Record<string, unknown>>(response);
 
       router.refresh();
     } catch (cancelError) {

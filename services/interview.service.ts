@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { InterviewSession } from "@/models/InterviewSession";
 import { Resume } from "@/models/Resume";
 import type { StructuredResumeData } from "@/services/ai.service";
@@ -33,29 +35,46 @@ type SubmitInterviewAnswerInput = {
 };
 
 export async function createInterviewSession(input: CreateInterviewSessionInput) {
-  const firstQuestion = await generateContextualInterviewQuestion({
-    structuredResume: input.structuredResume,
-    type: input.type,
-    jdInfo: input.jdInfo,
-  });
+  let firstQuestion = "";
+  try {
+    firstQuestion = await generateContextualInterviewQuestion({
+      structuredResume: input.structuredResume,
+      type: input.type,
+      jdInfo: input.jdInfo,
+    });
+  } catch (error) {
+    throw new AppError(
+      error instanceof Error ? error.message : "Unable to generate first interview question.",
+      { statusCode: 503 },
+    );
+  }
 
   await connectToDatabase();
 
-  const session = await InterviewSession.create({
-    userId: input.userId,
-    resumeId: input.resumeId,
-    subscriptionTier: input.subscriptionTier ?? "free",
-    type: input.type,
-    jdInfo: input.jdInfo ?? "",
-    questions: [firstQuestion],
-    answers: [""],
-    transcripts: [""],
-    answerVideoUrls: [""],
-    scores: [],
-    feedbacks: [],
-    analysisReports: [],
-    status: "active",
-  });
+  let session;
+  try {
+    session = await InterviewSession.create({
+      userId: input.userId,
+      resumeId: input.resumeId,
+      subscriptionTier: input.subscriptionTier ?? "free",
+      type: input.type,
+      jdInfo: input.jdInfo ?? "",
+      questions: [firstQuestion],
+      answers: [""],
+      transcripts: [""],
+      answerVideoUrls: [""],
+      scores: [],
+      feedbacks: [],
+      analysisReports: [],
+      status: "active",
+    });
+  } catch (error) {
+    logger.error("interview_session_create_failed", {
+      userId: input.userId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to create interview session.", { statusCode: 500 });
+  }
 
   return {
     id: session._id.toString(),
@@ -82,7 +101,7 @@ async function getSessionAndResume(input: { sessionId: string; userId: string })
   }).exec();
 
   if (!session) {
-    throw new Error("Interview session not found.");
+    throw new AppError("Interview session not found.", { statusCode: 404 });
   }
 
   const resume = await Resume.findById(session.resumeId).select("structuredData").lean<{
@@ -90,7 +109,7 @@ async function getSessionAndResume(input: { sessionId: string; userId: string })
   } | null>();
 
   if (!resume) {
-    throw new Error("Resume not found for this interview session.");
+    throw new AppError("Resume not found for this interview session.", { statusCode: 404 });
   }
 
   return { session, resume };
@@ -110,7 +129,7 @@ export async function submitInterviewAnswerAndGenerateFollowUp(input: SubmitInte
   });
 
   if ((session.status as string) === "ended") {
-    throw new Error("Interview session has already ended.");
+    throw new AppError("Interview session has already ended.", { statusCode: 400 });
   }
 
   if (isFreeTierExpired(session.createdAt as Date, session.subscriptionTier as string)) {
@@ -119,7 +138,7 @@ export async function submitInterviewAnswerAndGenerateFollowUp(input: SubmitInte
       userId: input.userId,
       reason: "auto_time_limit",
     });
-    throw new Error("Free-tier interview time limit reached. Session ended.");
+    throw new AppError("Free-tier interview time limit reached. Session ended.", { statusCode: 403 });
   }
 
   const currentQuestionIndex = Math.max((session.questions as string[]).length - 1, 0);
@@ -127,14 +146,24 @@ export async function submitInterviewAnswerAndGenerateFollowUp(input: SubmitInte
 
   let videoUrl = "";
   if (input.videoFile) {
-    const videoBuffer = Buffer.from(await input.videoFile.arrayBuffer());
-    const upload = await uploadInterviewVideoToCloudinary({
-      fileBuffer: videoBuffer,
-      userId: input.userId,
-      sessionId: session._id.toString(),
-      questionIndex: currentQuestionIndex,
-    });
-    videoUrl = upload.secureUrl;
+    try {
+      const videoBuffer = Buffer.from(await input.videoFile.arrayBuffer());
+      const upload = await uploadInterviewVideoToCloudinary({
+        fileBuffer: videoBuffer,
+        userId: input.userId,
+        sessionId: session._id.toString(),
+        questionIndex: currentQuestionIndex,
+      });
+      videoUrl = upload.secureUrl;
+    } catch (error) {
+      logger.error("interview_video_upload_failed", {
+        userId: input.userId,
+        sessionId: session._id.toString(),
+        questionIndex: currentQuestionIndex,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      throw new AppError("Unable to upload answer video.", { statusCode: 502 });
+    }
   }
 
   const analysis = analyzeInterviewAnswer(input.transcript, session.type as InterviewType);
@@ -189,7 +218,7 @@ export async function endInterviewSession(input: {
   }).exec();
 
   if (!session) {
-    throw new Error("Interview session not found.");
+    throw new AppError("Interview session not found.", { statusCode: 404 });
   }
 
   if ((session.status as string) === "ended") {
@@ -208,14 +237,24 @@ export async function endInterviewSession(input: {
     let videoUrl = (session.answerVideoUrls as string[])[currentQuestionIndex] ?? "";
 
     if (input.videoFile && !videoUrl) {
-      const videoBuffer = Buffer.from(await input.videoFile.arrayBuffer());
-      const upload = await uploadInterviewVideoToCloudinary({
-        fileBuffer: videoBuffer,
-        userId: input.userId,
-        sessionId: session._id.toString(),
-        questionIndex: currentQuestionIndex,
-      });
-      videoUrl = upload.secureUrl;
+      try {
+        const videoBuffer = Buffer.from(await input.videoFile.arrayBuffer());
+        const upload = await uploadInterviewVideoToCloudinary({
+          fileBuffer: videoBuffer,
+          userId: input.userId,
+          sessionId: session._id.toString(),
+          questionIndex: currentQuestionIndex,
+        });
+        videoUrl = upload.secureUrl;
+      } catch (error) {
+        logger.error("interview_end_video_upload_failed", {
+          userId: input.userId,
+          sessionId: session._id.toString(),
+          questionIndex: currentQuestionIndex,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        throw new AppError("Unable to upload answer video while ending session.", { statusCode: 502 });
+      }
     }
 
     const analysis = analyzeInterviewAnswer(draftTranscript, session.type as InterviewType);

@@ -1,4 +1,6 @@
 import { getGeminiClient, getGeminiResponseText } from "@/lib/gemini";
+import { AppError } from "@/lib/errors";
+import { logger, withLatencyLog } from "@/lib/logger";
 import type { StructuredResumeData } from "@/services/ai.service";
 
 export type InterviewType = "technical" | "hr";
@@ -34,12 +36,21 @@ function createPrompt(input: GenerateInterviewQuestionInput) {
 }
 
 export async function generateContextualInterviewQuestion(input: GenerateInterviewQuestionInput) {
-  const response = await getGeminiClient().models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: createPrompt(input),
-  });
+  try {
+    const response = await withLatencyLog("ai.generateContextualInterviewQuestion", () =>
+      getGeminiClient().models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: createPrompt(input),
+      }),
+    );
 
-  return getGeminiResponseText(response).replace(/^\d+[\).\s-]*/, "").trim();
+    return getGeminiResponseText(response).replace(/^\d+[\).\s-]*/, "").trim();
+  } catch (error) {
+    logger.error("ai_generate_contextual_question_failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to generate interview question right now.", { statusCode: 503 });
+  }
 }
 
 type GenerateFollowUpQuestionInput = {
@@ -85,34 +96,43 @@ export async function generateFollowUpQuestion(
     `Structured resume:\n${JSON.stringify(input.structuredResume)}`,
   ].join("\n\n");
 
-  const response = await getGeminiClient().models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-    },
-  });
+  try {
+    const response = await withLatencyLog("ai.generateFollowUpQuestion", () =>
+      getGeminiClient().models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        },
+      }),
+    );
 
-  const raw = getGeminiResponseText(response);
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
+    const raw = getGeminiResponseText(response);
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
 
-  if (start === -1 || end === -1) {
-    throw new Error("Gemini did not return valid follow-up JSON.");
+    if (start === -1 || end === -1) {
+      throw new Error("Gemini did not return valid follow-up JSON.");
+    }
+
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as {
+      score?: unknown;
+      feedback?: unknown;
+      followUpQuestion?: unknown;
+    };
+
+    return {
+      score: normalizeScore(parsed.score),
+      feedback: typeof parsed.feedback === "string" ? parsed.feedback.trim() : "No feedback available.",
+      followUpQuestion:
+        typeof parsed.followUpQuestion === "string" && parsed.followUpQuestion.trim()
+          ? parsed.followUpQuestion.trim()
+          : "Can you elaborate further on that example?",
+    };
+  } catch (error) {
+    logger.error("ai_generate_followup_failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new AppError("Unable to generate follow-up question right now.", { statusCode: 503 });
   }
-
-  const parsed = JSON.parse(raw.slice(start, end + 1)) as {
-    score?: unknown;
-    feedback?: unknown;
-    followUpQuestion?: unknown;
-  };
-
-  return {
-    score: normalizeScore(parsed.score),
-    feedback: typeof parsed.feedback === "string" ? parsed.feedback.trim() : "No feedback available.",
-    followUpQuestion:
-      typeof parsed.followUpQuestion === "string" && parsed.followUpQuestion.trim()
-        ? parsed.followUpQuestion.trim()
-        : "Can you elaborate further on that example?",
-  };
 }

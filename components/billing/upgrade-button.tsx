@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { parseApiResponse } from "@/lib/api-client";
 
 export function UpgradeButton({ disabled = false }: { disabled?: boolean }) {
   const [loading, setLoading] = useState(false);
@@ -16,10 +17,7 @@ export function UpgradeButton({ disabled = false }: { disabled?: boolean }) {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
       });
-      const payload = (await response.json()) as { checkoutUrl?: string; error?: string };
-      if (!response.ok || !payload.checkoutUrl) {
-        throw new Error(payload.error || "Unable to start checkout.");
-      }
+      const payload = await parseApiResponse<{ checkoutUrl: string }>(response);
 
       window.location.assign(payload.checkoutUrl);
     } catch (checkoutError) {
