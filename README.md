@@ -212,6 +212,134 @@ Main route groups in [`app/api`](/c:/Users/Dell/Desktop/mockai/app/api):
 - `interview/session` for session creation, answer submission, ending, and report access
 - `billing` for checkout, cancellation, bootstrap, and webhook handling
 
+## Curl Endpoints
+
+Most application endpoints are protected and require a valid signed-in session. For `curl` testing, pass your browser session cookie.
+
+Example:
+
+```bash
+export BASE_URL="http://localhost:3000"
+export SESSION_COOKIE="next-auth.session-token=your_session_cookie"
+```
+
+On PowerShell:
+
+```powershell
+$env:BASE_URL="http://localhost:3000"
+$env:SESSION_COOKIE="next-auth.session-token=your_session_cookie"
+```
+
+### Resume upload
+
+```bash
+curl -X POST "$BASE_URL/api/resume" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -F "file=@./resume.pdf"
+```
+
+### View latest uploaded resume
+
+```bash
+curl -i "$BASE_URL/api/resume/latest/view" \
+  -H "Cookie: $SESSION_COOKIE"
+```
+
+### Create interview session
+
+```bash
+curl -X POST "$BASE_URL/api/interview/session" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -d '{
+    "type": "technical",
+    "jdInfo": "Frontend React developer role with strong TypeScript skills"
+  }'
+```
+
+### Submit interview answer
+
+```bash
+curl -X POST "$BASE_URL/api/interview/session/<sessionId>/answer" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -F "transcript=I would break this problem into smaller components and optimize rendering carefully."
+```
+
+### Submit interview answer with video
+
+```bash
+curl -X POST "$BASE_URL/api/interview/session/<sessionId>/answer" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -F "transcript=Here is my spoken answer." \
+  -F "video=@./answer.webm"
+```
+
+### End interview session
+
+```bash
+curl -X POST "$BASE_URL/api/interview/session/<sessionId>/end" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -d '{
+    "reason": "manual"
+  }'
+```
+
+### End interview session with final transcript or video
+
+```bash
+curl -X POST "$BASE_URL/api/interview/session/<sessionId>/end" \
+  -H "Cookie: $SESSION_COOKIE" \
+  -F "reason=manual" \
+  -F "transcript=Final answer before ending the interview." \
+  -F "video=@./final-answer.webm"
+```
+
+### Fetch interview report
+
+```bash
+curl "$BASE_URL/api/interview/session/<sessionId>/report" \
+  -H "Cookie: $SESSION_COOKIE"
+```
+
+### Create Stripe checkout session
+
+```bash
+curl -X POST "$BASE_URL/api/billing/checkout" \
+  -H "Cookie: $SESSION_COOKIE"
+```
+
+### Cancel Stripe subscription at period end
+
+```bash
+curl -X POST "$BASE_URL/api/billing/cancel" \
+  -H "Cookie: $SESSION_COOKIE"
+```
+
+### Bootstrap Stripe product and price
+
+This endpoint is protected by `x-billing-bootstrap-token`.
+
+```bash
+curl -X POST "$BASE_URL/api/billing/bootstrap" \
+  -H "Content-Type: application/json" \
+  -H "x-billing-bootstrap-token: your_bootstrap_token" \
+  -d '{
+    "productName": "MockAI Pro",
+    "amountInCents": 1900,
+    "currency": "usd",
+    "interval": "month"
+  }'
+```
+
+### Stripe webhook endpoint
+
+Stripe should call this route directly:
+
+```text
+POST /api/billing/webhook
+```
+
 ## Notes for Contributors
 
 - The app validates environment variables on startup, so missing secrets will fail fast
